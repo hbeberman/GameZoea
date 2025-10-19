@@ -1,5 +1,31 @@
 use std::fmt;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mc {
+    M7,
+    M6,
+    M5,
+    M4,
+    M3,
+    M2,
+    M1,
+}
+
+impl Mc {
+    pub fn next(self) -> Self {
+        use Mc::*;
+        match self {
+            M7 => M6,
+            M6 => M5,
+            M5 => M4,
+            M4 => M3,
+            M3 => M2,
+            M2 => M1,
+            _ => panic!("Attempted to next M1"),
+        }
+    }
+}
+
 pub struct Registers {
     ir: u8,
     ie: u8,
@@ -18,20 +44,29 @@ pub struct Cpu {
     r: Registers,
     addr: u16,
     data: u8,
+    mc: Mc,
 }
 
 impl Registers {}
 
 impl Cpu {
-    // Cycle Functions
+    // {{{ Cycle Functions
     pub fn tick(&mut self) {
         self.t += 1;
         if self.t.is_multiple_of(4) {
             self.m += 1;
+            self.mc = self.mc.next();
         }
     }
 
-    // Memory Functions
+    pub fn tick4(&mut self) {
+        for _ in 0..4 {
+            self.tick()
+        }
+    }
+    // }}}
+
+    // {{{ Memory Functions
     pub fn mem_read(&self, addr: u16) -> u16 {
         self.mem[addr as usize]
     }
@@ -52,14 +87,19 @@ impl Cpu {
             0xFFFF => todo!("Memory write to IE register: {:04x}:{:04x}", addr, data),
         }
     }
+    // }}}
 
-    // Register Getters
+    // {{{ CPU Getters
     pub fn m(&self) -> u128 {
         self.m
     }
 
     pub fn t(&self) -> u128 {
         self.t
+    }
+
+    pub fn mc(&self) -> Mc {
+        self.mc
     }
 
     pub fn addr(&self) -> u16 {
@@ -149,14 +189,19 @@ impl Cpu {
     pub fn pc(&self) -> u16 {
         self.r.pc
     }
+    // }}}
 
-    // Register Setters
+    // {{{ CPU Setters
     pub fn set_m(&mut self, m: u128) {
         self.m = m
     }
 
     pub fn set_t(&mut self, t: u128) {
         self.t = t
+    }
+
+    pub fn set_mc(&mut self, mc: Mc) {
+        self.mc = mc
     }
 
     pub fn set_addr(&mut self, addr: u16) {
@@ -222,8 +267,10 @@ impl Cpu {
     pub fn set_pc(&mut self, pc: u16) {
         self.r.pc = pc
     }
+    // }}}
 }
 
+// {{{ Defaults
 #[allow(clippy::derivable_impls)]
 impl std::default::Default for Cpu {
     fn default() -> Self {
@@ -244,10 +291,13 @@ impl std::default::Default for Cpu {
             r,
             addr: 0x0000,
             data: 0x0000,
+            mc: Mc::M1,
         }
     }
 }
+// }}}
 
+// {{{ Display
 impl std::fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
@@ -276,12 +326,13 @@ impl std::fmt::Display for Cpu {
         )
     }
 }
+// }}}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Register Tests
+    // {{{ Register Tests
     #[test]
     fn cpu_default() {
         let cpu = Cpu::default();
@@ -325,20 +376,50 @@ mod tests {
         assert_eq!(cpu.sp(), 0x90A0);
         assert_eq!(cpu.pc(), 0xB0C0);
     }
+    // }}}
 
-    // Cycle Tests
+    // {{{ Cycle Tests
     #[test]
     fn cpu_t_tick() {
         let mut cpu = Cpu::default();
+        cpu.set_mc(Mc::M7);
         assert_eq!(cpu.t(), 0);
-        for i in 1..1000 {
+        for i in 1..16 {
             cpu.tick();
             assert_eq!(cpu.t(), i);
             assert_eq!(cpu.m(), i / 4);
         }
     }
 
-    // Memory Tests
+    #[test]
+    fn cycle_mc_nexting() {
+        let mut cpu = Cpu::default();
+        cpu.set_mc(Mc::M7);
+        assert_eq!(cpu.mc(), Mc::M7);
+        cpu.tick4();
+        assert_eq!(cpu.mc(), Mc::M6);
+        cpu.tick4();
+        assert_eq!(cpu.mc(), Mc::M5);
+        cpu.tick4();
+        assert_eq!(cpu.mc(), Mc::M4);
+        cpu.tick4();
+        assert_eq!(cpu.mc(), Mc::M3);
+        cpu.tick4();
+        assert_eq!(cpu.mc(), Mc::M2);
+        cpu.tick4();
+        assert_eq!(cpu.mc(), Mc::M1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Attempted to next M1")]
+    fn cycle_mc_next_m1() {
+        let mut cpu = Cpu::default();
+        cpu.set_mc(Mc::M1);
+        cpu.tick4();
+    }
+    // }}}
+
+    // {{{ Memory Tests
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to ROM bank 00: 0000:abcd")]
     fn mem_rom_write() {
@@ -422,4 +503,5 @@ mod tests {
         let mut cpu = Cpu::default();
         cpu.mem_write(0xFFFF, 0xABCD);
     }
+    // }}}
 }
