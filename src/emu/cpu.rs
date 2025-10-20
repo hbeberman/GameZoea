@@ -96,6 +96,7 @@ impl Cpu {
             0x00 => Cpu::noop, // noop
             //
             0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
+            0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
             //
             _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
         }
@@ -127,6 +128,7 @@ impl Cpu {
         }
     }
 
+    // {{{ opcode inc_r8
     pub fn inc_r8(&mut self) {
         match self.mc {
             M1 => {
@@ -162,7 +164,39 @@ impl Cpu {
             _ => panic!("Invalid mc in inc_r8: {:?}", self.mc),
         }
     }
+    // }}}
 
+    // {{{ opcode dec_r8
+    pub fn dec_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                let r8 = R8::from((self.ir() & M543) >> 3);
+                eprintln!("dec_r8 r8:{:?}", r8);
+
+                let (result, overflow) = self.r8(r8).overflowing_sub(1);
+
+                if result == 0 {
+                    self.set_z(1)
+                } else {
+                    self.set_z(0)
+                }
+
+                self.set_bcdn(1);
+
+                if overflow {
+                    self.set_cy(1)
+                } else {
+                    self.set_cy(0)
+                }
+
+                self.set_r8(r8, result);
+                self.fetch_next()
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in dec_r8: {:?}", self.mc),
+        }
+    }
+    // }}}
     // }}}
 
     // {{{ Cycle Functions
@@ -170,6 +204,7 @@ impl Cpu {
         self.t += 1;
         if self.t.is_multiple_of(4) {
             self.m += 1;
+
             self.execute()
         }
     }
@@ -726,6 +761,33 @@ mod tests {
         assert_eq!(cpu.h(), 1);
         assert_eq!(cpu.l(), 1);
         assert_eq!(cpu.a(), 1);
+    }
+
+    #[test]
+    fn execute_dec_r8() {
+        let mut cpu = Cpu::default();
+        let mem = [0x05, 0x05, 0x25, 0x15, 0x0D, 0x2D, 0x1D, 0x3D];
+        cpu.mem[..mem.len()].copy_from_slice(&mem);
+        cpu.set_b(0x01);
+        cpu.tick4();
+        cpu.tick4();
+        assert_eq!(cpu.b(), 0);
+        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.z(), 1);
+        cpu.tick4();
+        assert_eq!(cpu.b(), 0xFF);
+        assert_eq!(cpu.cy(), 1);
+        assert_eq!(cpu.z(), 0);
+
+        for _ in 0..10 {
+            cpu.tick4();
+        }
+        assert_eq!(cpu.c(), 0xFF);
+        assert_eq!(cpu.d(), 0xFF);
+        assert_eq!(cpu.e(), 0xFF);
+        assert_eq!(cpu.h(), 0xFF);
+        assert_eq!(cpu.l(), 0xFF);
+        assert_eq!(cpu.a(), 0xFF);
     }
     // }}}
 }
