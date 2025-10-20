@@ -129,6 +129,7 @@ pub struct Registers {
     hl: u16,
     sp: u16,
     pc: u16,
+    wz: u16,
 }
 
 pub struct Cpu {
@@ -148,7 +149,9 @@ impl Cpu {
     // {{{ Execute Functions
     pub fn decode(&mut self) -> fn(&mut Cpu) {
         match self.ir() {
-            0x00 => Cpu::noop, // noop
+            0x00 => Cpu::nop, // nop
+            //
+            0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
             //
             0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
             0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
@@ -168,24 +171,46 @@ impl Cpu {
     }
 
     pub fn fetch_next(&mut self) {
-        let (pc, overflow) = self.pc().overflowing_add(1);
-        if overflow {
-            panic!("PC overflowed!")
-        }
         self.set_ir(self.mem_read(self.pc()));
+        self.inc_pc();
         self.mc = M0;
         self.executing = self.decode();
         (self.executing)(self);
-        self.set_pc(pc);
     }
 
-    pub fn noop(&mut self) {
+    // {{{ opcode nop
+    pub fn nop(&mut self) {
         match self.mc {
             Mc::M1 => self.fetch_next(),
             Mc::M0 => self.set_mc(M2),
-            _ => panic!("Invalid mc in noop: {:?}", self.mc),
+            _ => panic!("Invalid mc in nop: {:?}", self.mc),
         }
     }
+    // }}}
+
+    // {{{ opcode ld_r16_imm16
+    pub fn ld_r16_imm16(&mut self) {
+        let r16 = R16::from((self.ir() & M54) >> 4);
+        match self.mc {
+            M3 => {
+                self.addr = self.pc();
+                self.set_z(self.mem_read(self.pc()));
+                self.inc_pc();
+            }
+            M2 => {
+                self.addr = self.pc();
+                self.set_w(self.mem_read(self.pc()));
+                self.inc_pc();
+            }
+            M1 => {
+                self.set_r16(r16, self.wz());
+                self.fetch_next()
+            }
+            M0 => self.set_mc(M4),
+            _ => panic!("foo"),
+        }
+    }
+    // }}}
 
     // {{{ opcode inc_r16
     pub fn inc_r16(&mut self) {
@@ -291,7 +316,7 @@ impl Cpu {
 
                 eprintln!("Incrementing {:?} to {:02x}", r8, result);
 
-                self.set_z(z);
+                self.set_zero(z);
                 self.set_bcdn(0);
                 self.set_bcdh(h);
                 self.set_r8(r8, result);
@@ -313,7 +338,7 @@ impl Cpu {
 
                 let (result, _, h, z) = self.r8(r8).halfcarry_sub(1);
 
-                self.set_z(z);
+                self.set_zero(z);
                 self.set_bcdn(1);
                 self.set_bcdh(h);
                 self.set_r8(r8, result);
@@ -456,7 +481,7 @@ impl Cpu {
         self.r.af as u8
     }
 
-    pub fn z(&self) -> u8 {
+    pub fn zero(&self) -> u8 {
         ((self.r.af & 0x80) >> 7) as u8
     }
 
@@ -514,6 +539,18 @@ impl Cpu {
 
     pub fn pc(&self) -> u16 {
         self.r.pc
+    }
+
+    pub fn wz(&self) -> u16 {
+        self.r.wz
+    }
+
+    pub fn w(&self) -> u8 {
+        ((self.r.wz & 0xFF00) >> 8) as u8
+    }
+
+    pub fn z(&self) -> u8 {
+        (self.r.wz & 0x00FF) as u8
     }
     // }}}
 
@@ -595,7 +632,7 @@ impl Cpu {
         self.r.af = self.r.af & 0x00FF | (a as u16) << 8
     }
 
-    pub fn set_z(&mut self, z: u8) {
+    pub fn set_zero(&mut self, z: u8) {
         if z & 0xFE != 0 {
             panic!("Invalid value used as flag z: {:02x}", z)
         }
@@ -666,6 +703,26 @@ impl Cpu {
     pub fn set_pc(&mut self, pc: u16) {
         self.r.pc = pc
     }
+
+    pub fn inc_pc(&mut self) {
+        let (pc, carry) = self.pc().overflowing_add(1);
+        if carry {
+            panic!("PC overflowed!");
+        }
+        self.set_pc(pc)
+    }
+
+    pub fn set_wz(&mut self, wz: u16) {
+        self.r.wz = wz
+    }
+
+    pub fn set_w(&mut self, w: u8) {
+        self.r.wz = self.r.wz & 0x00FF | (w as u16) << 8
+    }
+
+    pub fn set_z(&mut self, z: u8) {
+        self.r.wz = self.r.wz & 0xFF00 | (z as u16)
+    }
     // }}}
 }
 
@@ -682,6 +739,7 @@ impl std::default::Default for Cpu {
             hl: 0x0000,
             sp: 0x0000,
             pc: 0x0000,
+            wz: 0x0000,
         };
         Cpu {
             mem: [0u8; 0xFFFF],
@@ -691,7 +749,7 @@ impl std::default::Default for Cpu {
             addr: 0x0000,
             data: 0x0000,
             mc: Mc::M1,
-            executing: Cpu::noop,
+            executing: Cpu::nop,
         }
     }
 }
@@ -719,7 +777,7 @@ impl std::fmt::Display for Cpu {
             self.sp(),
             self.pc(),
             self.f(),
-            self.z(),
+            self.zero(),
             self.bcdn(),
             self.bcdh(),
             self.carry(),
@@ -782,7 +840,7 @@ mod tests {
     #[test]
     fn cpu_flag_sets() {
         let mut cpu = Cpu::default();
-        cpu.set_z(1);
+        cpu.set_zero(1);
         cpu.set_bcdn(1);
         cpu.set_bcdh(1);
         cpu.set_carry(1);
@@ -793,7 +851,7 @@ mod tests {
     fn cpu_flag_gets() {
         let mut cpu = Cpu::default();
         cpu.set_af(0x00F0);
-        assert_eq!(cpu.z(), 1);
+        assert_eq!(cpu.zero(), 1);
         assert_eq!(cpu.bcdn(), 1);
         assert_eq!(cpu.bcdh(), 1);
         assert_eq!(cpu.carry(), 1);
@@ -803,8 +861,8 @@ mod tests {
     #[should_panic(expected = "Invalid value used as flag z: 02")]
     fn cpu_flag_z_invalid() {
         let mut cpu = Cpu::default();
-        cpu.set_z(2);
-        assert_eq!(cpu.z(), 1);
+        cpu.set_zero(2);
+        assert_eq!(cpu.zero(), 1);
     }
     // }}}
 
@@ -909,13 +967,38 @@ mod tests {
 
     // {{{ Execute Tests
     #[test]
-    fn execute_noop() {
+    fn execute_nop() {
         let mut cpu = Cpu::default();
         cpu.tick4();
         assert_eq!(cpu.pc(), 0x0001);
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.pc(), 0x0003);
+    }
+
+    #[test]
+    fn execute_ld_r16_imm16() {
+        let mut cpu = Cpu::default();
+        let mem = [
+            0x01, 0x34, 0x12, 0x11, 0x78, 0x56, 0x21, 0xbc, 0x9a, 0x31, 0xf0, 0xde,
+        ];
+        cpu.mem[..mem.len()].copy_from_slice(&mem);
+        cpu.tick4();
+        cpu.tick4();
+        assert_eq!(cpu.w(), 0x00);
+        assert_eq!(cpu.z(), 0x34);
+        cpu.tick4();
+        assert_eq!(cpu.bc(), 0x0000);
+        assert_eq!(cpu.w(), 0x12);
+        assert_eq!(cpu.z(), 0x34);
+        cpu.tick4();
+        assert_eq!(cpu.bc(), 0x1234);
+        for _ in 0..30 {
+            cpu.tick4();
+        }
+        assert_eq!(cpu.de(), 0x5678);
+        assert_eq!(cpu.hl(), 0x9ABC);
+        assert_eq!(cpu.sp(), 0xDEF0);
     }
 
     #[test]
@@ -928,7 +1011,7 @@ mod tests {
         cpu.tick4();
         assert_eq!(cpu.bc(), 1);
         assert_eq!(cpu.carry(), 0);
-        assert_eq!(cpu.z(), 0);
+        assert_eq!(cpu.zero(), 0);
 
         for _ in 0..20 {
             cpu.tick4();
@@ -949,7 +1032,7 @@ mod tests {
         cpu.tick4();
         assert_eq!(cpu.bc(), 0xFFFF);
         assert_eq!(cpu.carry(), 0);
-        assert_eq!(cpu.z(), 0);
+        assert_eq!(cpu.zero(), 0);
 
         for _ in 0..20 {
             cpu.tick4();
@@ -996,11 +1079,11 @@ mod tests {
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.b(), 0);
-        assert_eq!(cpu.z(), 1);
+        assert_eq!(cpu.zero(), 1);
         cpu.set_b(0x0F);
         cpu.tick4();
         assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.z(), 0);
+        assert_eq!(cpu.zero(), 0);
 
         for _ in 0..10 {
             cpu.tick4();
@@ -1024,12 +1107,12 @@ mod tests {
         cpu.tick4();
         assert_eq!(cpu.b(), 0);
         assert_eq!(cpu.bcdh(), 0);
-        assert_eq!(cpu.z(), 1);
+        assert_eq!(cpu.zero(), 1);
         cpu.set_b(0x10);
         cpu.tick4();
         assert_eq!(cpu.bcdh(), 1);
         assert_eq!(cpu.b(), 0x0F);
-        assert_eq!(cpu.z(), 0);
+        assert_eq!(cpu.zero(), 0);
 
         for _ in 0..10 {
             cpu.tick4();
