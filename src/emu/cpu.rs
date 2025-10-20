@@ -32,6 +32,26 @@ impl R8 {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum R16 {
+    BC,
+    DE,
+    HL,
+    SP,
+}
+
+impl R16 {
+    pub fn from(r16: u8) -> Self {
+        match r16 {
+            0 => R16::BC,
+            1 => R16::DE,
+            2 => R16::HL,
+            3 => R16::SP,
+            _ => panic!("Invalid r16 operand: {:02x}", r16),
+        }
+    }
+}
 // }}}
 
 // {{{ Cycle Enums
@@ -95,6 +115,9 @@ impl Cpu {
         match self.ir() {
             0x00 => Cpu::noop, // noop
             //
+            0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
+            0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
+            //
             0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
             0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
             //
@@ -128,17 +151,49 @@ impl Cpu {
         }
     }
 
+    pub fn inc_r16(&mut self) {
+        match self.mc {
+            M2 => {
+                self.addr = self.r16(R16::from((self.ir() & M54) >> 4));
+            }
+            M1 => {
+                let r16 = R16::from((self.ir() & M54) >> 4);
+
+                let result = self.r16(r16).wrapping_add(1);
+                eprintln!("Incrementing {:?} to {:04x}", r16, result);
+
+                self.set_r16(r16, result);
+                self.fetch_next()
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("foo"),
+        }
+    }
+
+    pub fn dec_r16(&mut self) {
+        match self.mc {
+            M2 => {
+                self.addr = self.r16(R16::from((self.ir() & M54) >> 4));
+            }
+            M1 => {
+                let r16 = R16::from((self.ir() & M54) >> 4);
+
+                let result = self.r16(r16).wrapping_sub(1);
+                eprintln!("Decrementing {:?} to {:04x}", r16, result);
+
+                self.set_r16(r16, result);
+                self.fetch_next()
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("foo"),
+        }
+    }
+
     // {{{ opcode inc_r8
     pub fn inc_r8(&mut self) {
         match self.mc {
             M1 => {
                 let r8 = R8::from((self.ir() & M543) >> 3);
-                eprintln!("inc_r8 self.ir:{:02x}", self.ir());
-                eprintln!("inc_r8 self.ir mask:{:02x}", self.ir() & M543);
-                eprintln!("inc_r8 self.ir mask shift:{:02x}", self.ir() & M543 >> 3);
-                eprintln!("inc_r8 r8:{:?}", r8);
-                eprintln!("{}", self);
-
                 let (result, overflow) = self.r8(r8).overflowing_add(1);
 
                 eprintln!("Incrementing {:?} to {:02x}", r8, result);
@@ -261,6 +316,15 @@ impl Cpu {
         }
     }
 
+    pub fn r16(&self, r16: R16) -> u16 {
+        match r16 {
+            R16::BC => self.bc(),
+            R16::DE => self.de(),
+            R16::HL => self.hl(),
+            R16::SP => self.sp(),
+        }
+    }
+
     pub fn m(&self) -> u128 {
         self.m
     }
@@ -374,6 +438,15 @@ impl Cpu {
             R8::L => self.set_l(data),
             R8::HL => todo!("Tried to set [hl]: {:04x}:{:02x}", self.hl(), data),
             R8::A => self.set_a(data),
+        }
+    }
+
+    pub fn set_r16(&mut self, r16: R16, data: u16) {
+        match r16 {
+            R16::BC => self.set_bc(data),
+            R16::DE => self.set_de(data),
+            R16::HL => self.set_hl(data),
+            R16::SP => self.set_sp(data),
         }
     }
 
@@ -734,6 +807,48 @@ mod tests {
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.pc(), 0x0003);
+    }
+
+    #[test]
+    fn execute_inc_r16() {
+        let mut cpu = Cpu::default();
+        let mem = [0x03, 0x23, 0x13, 0x33];
+        cpu.mem[..mem.len()].copy_from_slice(&mem);
+        cpu.tick4();
+        cpu.tick4();
+        cpu.tick4();
+        assert_eq!(cpu.bc(), 1);
+        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.z(), 0);
+
+        for _ in 0..20 {
+            cpu.tick4();
+        }
+        assert_eq!(cpu.bc(), 1);
+        assert_eq!(cpu.de(), 1);
+        assert_eq!(cpu.hl(), 1);
+        assert_eq!(cpu.sp(), 1);
+    }
+
+    #[test]
+    fn execute_dec_r16() {
+        let mut cpu = Cpu::default();
+        let mem = [0x0B, 0x2B, 0x1B, 0x3B];
+        cpu.mem[..mem.len()].copy_from_slice(&mem);
+        cpu.tick4();
+        cpu.tick4();
+        cpu.tick4();
+        assert_eq!(cpu.bc(), 0xFFFF);
+        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.z(), 0);
+
+        for _ in 0..20 {
+            cpu.tick4();
+        }
+        assert_eq!(cpu.bc(), 0xFFFF);
+        assert_eq!(cpu.de(), 0xFFFF);
+        assert_eq!(cpu.hl(), 0xFFFF);
+        assert_eq!(cpu.sp(), 0xFFFF);
     }
 
     #[test]
