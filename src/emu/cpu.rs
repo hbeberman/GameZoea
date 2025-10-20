@@ -53,6 +53,26 @@ impl R16 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum R16mem {
+    BC,
+    DE,
+    HLi,
+    HLd,
+}
+
+impl R16mem {
+    pub fn from(r16: u8) -> Self {
+        match r16 {
+            0 => R16mem::BC,
+            1 => R16mem::DE,
+            2 => R16mem::HLi,
+            3 => R16mem::HLd,
+            _ => panic!("Invalid r16 operand: {:02x}", r16),
+        }
+    }
+}
+
 trait OverflowingAdd8 {
     fn halfcarry_add(self, rhs: u8) -> (u8, u8, u8, u8);
 }
@@ -150,6 +170,7 @@ impl Cpu {
             0x00 => Cpu::nop, // nop
             //
             0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
+            0x02 | 0x22 | 0x12 | 0x32 => Cpu::ld_mr16mem_a,
             //
             0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
             0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
@@ -213,6 +234,26 @@ impl Cpu {
         }
     }
     // }}}
+    // {{{ opcode ld_m_r16mem_a
+    pub fn ld_mr16mem_a(&mut self) {
+        match self.mc {
+            M2 => {
+                let r16mem = R16mem::from((self.ir() & M54) >> 4);
+                self.addr = self.r16mem(r16mem);
+                self.data = self.a();
+                self.mem_write();
+
+                match r16mem {
+                    R16mem::HLi => self.set_hl(self.hl() + 1),
+                    R16mem::HLd => self.set_hl(self.hl() - 1),
+                    _ => (),
+                }
+            }
+            M1 => self.fetch_next(),
+            M0 => self.set_mc(M3),
+            _ => panic!("foo"),
+        }
+    }
 
     // {{{ opcode inc_r16
     pub fn inc_r16(&mut self) {
@@ -381,7 +422,9 @@ impl Cpu {
         self.mem[addr as usize]
     }
 
-    pub fn mem_write(&mut self, addr: u16, data: u8) {
+    pub fn mem_write(&mut self) {
+        let addr = self.addr();
+        let data = self.data();
         match addr {
             0x0000..0x4000 => todo!("Memory write to ROM bank 00: {:04x}:{:02x}", addr, data),
             0x4000..0x8000 => todo!("Memory write to ROM bank 01-NN: {:04x}:{:02x}", addr, data),
@@ -427,6 +470,15 @@ impl Cpu {
             R16::DE => self.de(),
             R16::HL => self.hl(),
             R16::SP => self.sp(),
+        }
+    }
+
+    pub fn r16mem(&self, r16mem: R16mem) -> u16 {
+        match r16mem {
+            R16mem::BC => self.bc(),
+            R16mem::DE => self.de(),
+            R16mem::HLi => self.hl(),
+            R16mem::HLd => self.hl(),
         }
     }
 
@@ -582,6 +634,15 @@ impl Cpu {
             R16::DE => self.set_de(data),
             R16::HL => self.set_hl(data),
             R16::SP => self.set_sp(data),
+        }
+    }
+
+    pub fn set_r16mem(&mut self, r16mem: R16mem, data: u16) {
+        match r16mem {
+            R16mem::BC => self.set_bc(data),
+            R16mem::DE => self.set_de(data),
+            R16mem::HLi => self.set_hl(data),
+            R16mem::HLd => self.set_hl(data),
         }
     }
 
@@ -893,41 +954,53 @@ mod tests {
     #[should_panic(expected = "not yet implemented: Memory write to ROM bank 00: 0000:ab")]
     fn mem_rom_write() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0x0000, 0xAB);
+        cpu.set_addr(0x0000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to ROM bank 01-NN: 4000:ab")]
     fn mem_rom_bankable_write() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0x4000, 0xAB);
+        cpu.set_addr(0x4000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     fn mem_write_read_vram() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0x8000, 0xAB);
+        cpu.set_addr(0x8000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
         assert_eq!(cpu.mem_dbg_read(0x8000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_external_ram() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xA000, 0xAB);
+        cpu.set_addr(0xA000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
         assert_eq!(cpu.mem_dbg_read(0xA000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_work_ram() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xC000, 0xAB);
+        cpu.set_addr(0xC000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
         assert_eq!(cpu.mem_dbg_read(0xC000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_work_ram_bankable() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xD000, 0xAB);
+        cpu.set_addr(0xD000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
         assert_eq!(cpu.mem_dbg_read(0xD000), 0xAB);
     }
 
@@ -935,42 +1008,54 @@ mod tests {
     #[should_panic(expected = "Memory write to echo RAM: e000:ab")]
     fn mem_write_echo() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xE000, 0xAB);
+        cpu.set_addr(0xE000);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to OAM: fe00:ab")]
     fn mem_write_oam() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xFE00, 0xAB);
+        cpu.set_addr(0xFE00);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "Memory write to not usable: fea0:ab")]
     fn mem_write_not_usable() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xFEA0, 0xAB);
+        cpu.set_addr(0xFEA0);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to I/O registers: ff00:ab")]
     fn mem_write_io() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xFF00, 0xAB);
+        cpu.set_addr(0xFF00);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to HRAM: ff80:ab")]
     fn mem_write_hram() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xFF80, 0xAB);
+        cpu.set_addr(0xFF80);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to IE register: ffff:ab")]
     fn mem_write_ie() {
         let mut cpu = Cpu::default();
-        cpu.mem_write(0xFFFF, 0xAB);
+        cpu.set_addr(0xFFFF);
+        cpu.set_data(0xAB);
+        cpu.mem_write();
     }
     // }}}
 
@@ -1011,6 +1096,38 @@ mod tests {
         assert_eq!(cpu.de(), 0x5678);
         assert_eq!(cpu.hl(), 0x9ABC);
         assert_eq!(cpu.sp(), 0xDEF0);
+    }
+    // }}}
+
+    // {{{ test execute_ld_mr16mem_a
+    #[test]
+    fn execute_ld_mr16mem_a() {
+        let mut cpu = Cpu::default();
+        // ld bc, 0xC000
+        // ld de, 0xD000
+        // ld hl, 0xD0F0
+        // inc a
+        // ld [bc], a
+        // ld [de], a
+        // ld [hl+], a
+        // ld [hl-], a
+        // ld [hl-], a
+        let mem = [
+            0x01, 0x00, 0xc0, 0x11, 0x00, 0xd0, 0x21, 0xf0, 0xd0, 0x3c, 0x02, 0x12, 0x22, 0x32,
+            0x32,
+        ];
+        cpu.mem[..mem.len()].copy_from_slice(&mem);
+        cpu.tick4();
+        for _ in 0..40 {
+            cpu.tick4();
+        }
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0x1);
+        assert_eq!(cpu.mem_dbg_read(0xD000), 0x1);
+        assert_eq!(cpu.hl(), 0xD0EF);
+        assert_eq!(cpu.mem_dbg_read(0xD0EF), 0x0);
+        assert_eq!(cpu.mem_dbg_read(0xD0F0), 0x1);
+        assert_eq!(cpu.mem_dbg_read(0xD0F1), 0x1);
+        assert_eq!(cpu.mem_dbg_read(0xD0F2), 0x0);
     }
     // }}}
 
