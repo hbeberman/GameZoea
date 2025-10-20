@@ -54,26 +54,36 @@ impl R16 {
 }
 
 trait OverflowingAdd8 {
-    fn halfcarry_add(self, rhs: u8) -> (u8, bool, bool);
+    fn halfcarry_add(self, rhs: u8) -> (u8, u8, u8, u8);
 }
 
 impl OverflowingAdd8 for u8 {
-    fn halfcarry_add(self, rhs: u8) -> (u8, bool, bool) {
+    fn halfcarry_add(self, rhs: u8) -> (u8, u8, u8, u8) {
         let (result, carry) = self.overflowing_add(rhs);
         let halfcarry = (self & 0x0F) + (rhs & 0x0F) > 0x0F;
-        (result, carry, halfcarry)
+        (
+            result,
+            if carry { 1 } else { 0 },
+            if halfcarry { 1 } else { 0 },
+            if result == 0 { 1 } else { 0 },
+        )
     }
 }
 
 trait OverflowingSub8 {
-    fn halfcarry_sub(self, rhs: u8) -> (u8, bool, bool);
+    fn halfcarry_sub(self, rhs: u8) -> (u8, u8, u8, u8);
 }
 
 impl OverflowingSub8 for u8 {
-    fn halfcarry_sub(self, rhs: u8) -> (u8, bool, bool) {
+    fn halfcarry_sub(self, rhs: u8) -> (u8, u8, u8, u8) {
         let (result, carry) = self.overflowing_sub(rhs);
         let halfcarry = (self & 0x0F) < (rhs & 0x0F);
-        (result, carry, halfcarry)
+        (
+            result,
+            if carry { 1 } else { 0 },
+            if halfcarry { 1 } else { 0 },
+            if result == 0 { 1 } else { 0 },
+        )
     }
 }
 
@@ -177,6 +187,7 @@ impl Cpu {
         }
     }
 
+    // {{{ opcode inc_r16
     pub fn inc_r16(&mut self) {
         match self.mc {
             M2 => {
@@ -195,7 +206,9 @@ impl Cpu {
             _ => panic!("foo"),
         }
     }
+    // }}}
 
+    // {{{ opcode dec_r16
     pub fn dec_r16(&mut self) {
         match self.mc {
             M2 => {
@@ -214,51 +227,75 @@ impl Cpu {
             _ => panic!("foo"),
         }
     }
+    // }}}
 
+    // {{{ opcode add_hl_r16
     pub fn add_hl_r16(&mut self) {
         match self.mc {
             M2 => {
                 self.addr = 0x0000;
-                self.set_l(0);
+                let r16 = R16::from((self.ir() & M54) >> 4);
+                let (r, c, h, _) = self.l().halfcarry_add(self.lo(r16));
+                eprintln!(
+                    "Adding {:?} lo ({:02x}) to HL => {:02x}",
+                    r16,
+                    self.lo(r16),
+                    r
+                );
+
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.set_l(r);
             }
             M1 => {
                 let r16 = R16::from((self.ir() & M54) >> 4);
 
-                let result = self.r16(r16).wrapping_sub(1);
-                eprintln!("Decrementing {:?} to {:04x}", r16, result);
+                let (r1, c1, h1, _) = self.h().halfcarry_add(self.hi(r16));
+                let (r, c2, h2, _) = r1.halfcarry_add(self.carry());
+                eprintln!(
+                    "Adding {:?} hi ({:02x}) to HL => {:02x}",
+                    r16,
+                    self.hi(r16),
+                    r
+                );
 
-                self.set_r16(r16, result);
+                self.set_bcdn(0);
+                if c1 + c2 > 0 {
+                    self.set_carry(1);
+                } else {
+                    self.set_carry(0);
+                }
+                if h1 + h2 > 0 {
+                    self.set_bcdh(1);
+                } else {
+                    self.set_bcdh(0);
+                }
+
+                self.set_h(r);
                 self.fetch_next()
             }
             M0 => self.set_mc(M3),
             _ => panic!("foo"),
         }
     }
+    // }}}
 
     // {{{ opcode inc_r8
     pub fn inc_r8(&mut self) {
         match self.mc {
             M1 => {
                 let r8 = R8::from((self.ir() & M543) >> 3);
-                let (result, _, halfcarry) = self.r8(r8).halfcarry_add(1);
+                let (result, _, h, z) = self.r8(r8).halfcarry_add(1);
 
                 eprintln!("Incrementing {:?} to {:02x}", r8, result);
 
-                if result == 0 {
-                    self.set_z(1)
-                } else {
-                    self.set_z(0)
-                }
-
+                self.set_z(z);
                 self.set_bcdn(0);
-
-                if halfcarry {
-                    self.set_bcdh(1)
-                } else {
-                    self.set_bcdh(0)
-                }
-
+                self.set_bcdh(h);
                 self.set_r8(r8, result);
+
                 self.fetch_next()
             }
             M0 => self.set_mc(M2),
@@ -274,23 +311,13 @@ impl Cpu {
                 let r8 = R8::from((self.ir() & M543) >> 3);
                 eprintln!("dec_r8 r8:{:?}", r8);
 
-                let (result, _, halfcarry) = self.r8(r8).halfcarry_sub(1);
+                let (result, _, h, z) = self.r8(r8).halfcarry_sub(1);
 
-                if result == 0 {
-                    self.set_z(1)
-                } else {
-                    self.set_z(0)
-                }
-
+                self.set_z(z);
                 self.set_bcdn(1);
-
-                if halfcarry {
-                    self.set_bcdh(1)
-                } else {
-                    self.set_bcdh(0)
-                }
-
+                self.set_bcdh(h);
                 self.set_r8(r8, result);
+
                 self.fetch_next()
             }
             M0 => self.set_mc(M2),
@@ -298,7 +325,7 @@ impl Cpu {
         }
     }
     // }}}
-    // }}}
+    // }}} end Execute Functions
 
     // {{{ Cycle Functions
     pub fn tick(&mut self) {
@@ -371,6 +398,24 @@ impl Cpu {
         }
     }
 
+    pub fn hi(&self, r16: R16) -> u8 {
+        match r16 {
+            R16::BC => self.b(),
+            R16::DE => self.d(),
+            R16::HL => self.h(),
+            R16::SP => ((self.sp() & 0xFF00) >> 8) as u8,
+        }
+    }
+
+    pub fn lo(&self, r16: R16) -> u8 {
+        match r16 {
+            R16::BC => self.c(),
+            R16::DE => self.e(),
+            R16::HL => self.l(),
+            R16::SP => (self.sp() & 0x00FF) as u8,
+        }
+    }
+
     pub fn m(&self) -> u128 {
         self.m
     }
@@ -423,7 +468,7 @@ impl Cpu {
         ((self.r.af & 0x20) >> 5) as u8
     }
 
-    pub fn cy(&self) -> u8 {
+    pub fn carry(&self) -> u8 {
         ((self.r.af & 0x10) >> 4) as u8
     }
 
@@ -496,6 +541,24 @@ impl Cpu {
         }
     }
 
+    pub fn set_hi(&mut self, r16: R16, data: u8) {
+        match r16 {
+            R16::BC => self.set_b(data),
+            R16::DE => self.set_d(data),
+            R16::HL => self.set_h(data),
+            R16::SP => self.set_sp(self.sp() & 0x00FF | (data as u16) << 8),
+        }
+    }
+
+    pub fn set_lo(&mut self, r16: R16, data: u8) {
+        match r16 {
+            R16::BC => self.set_c(data),
+            R16::DE => self.set_e(data),
+            R16::HL => self.set_l(data),
+            R16::SP => self.set_sp(self.sp() & 0xFF00 | data as u16),
+        }
+    }
+
     pub fn set_m(&mut self, m: u128) {
         self.m = m
     }
@@ -553,7 +616,7 @@ impl Cpu {
         self.r.af = self.r.af & 0xFFDF | (hy as u16) << 5
     }
 
-    pub fn set_cy(&mut self, cy: u8) {
+    pub fn set_carry(&mut self, cy: u8) {
         if cy & 0xFE != 0 {
             panic!("Invalid value used as flag cy: {:02x}", cy)
         }
@@ -659,7 +722,7 @@ impl std::fmt::Display for Cpu {
             self.z(),
             self.bcdn(),
             self.bcdh(),
-            self.cy(),
+            self.carry(),
             self.ir(),
             self.mc(),
         )
@@ -722,7 +785,7 @@ mod tests {
         cpu.set_z(1);
         cpu.set_bcdn(1);
         cpu.set_bcdh(1);
-        cpu.set_cy(1);
+        cpu.set_carry(1);
         assert_eq!(cpu.f(), 0xF0);
     }
 
@@ -733,7 +796,7 @@ mod tests {
         assert_eq!(cpu.z(), 1);
         assert_eq!(cpu.bcdn(), 1);
         assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.cy(), 1);
+        assert_eq!(cpu.carry(), 1);
     }
 
     #[test]
@@ -864,7 +927,7 @@ mod tests {
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.bc(), 1);
-        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.carry(), 0);
         assert_eq!(cpu.z(), 0);
 
         for _ in 0..20 {
@@ -885,7 +948,7 @@ mod tests {
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.bc(), 0xFFFF);
-        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.carry(), 0);
         assert_eq!(cpu.z(), 0);
 
         for _ in 0..20 {
@@ -895,6 +958,33 @@ mod tests {
         assert_eq!(cpu.de(), 0xFFFF);
         assert_eq!(cpu.hl(), 0xFFFF);
         assert_eq!(cpu.sp(), 0xFFFF);
+    }
+
+    #[test]
+    fn execute_add_hl_r16() {
+        let mut cpu = Cpu::default();
+        let mem = [0x09, 0x19, 0x29, 0x39];
+        cpu.mem[..mem.len()].copy_from_slice(&mem);
+        cpu.set_hl(0x0001);
+        cpu.set_bc(0x00FF);
+        cpu.set_de(0x0002);
+        cpu.set_sp(0x0F00);
+        cpu.tick4();
+        cpu.tick4();
+        assert_eq!(cpu.addr(), 0x0000);
+        assert_eq!(cpu.l(), 0x0);
+        assert_eq!(cpu.carry(), 1);
+        assert_eq!(cpu.bcdh(), 1);
+        cpu.tick4();
+        assert_eq!(cpu.hl(), 0x0100);
+
+        for _ in 0..20 {
+            cpu.tick4();
+        }
+        // ((0x1 + 0xFF + 0x2) * 2) + 0x0F00
+        assert_eq!(cpu.hl(), 0x1104);
+        assert_eq!(cpu.carry(), 0);
+        assert_eq!(cpu.bcdh(), 1);
     }
 
     #[test]
