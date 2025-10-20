@@ -143,8 +143,6 @@ pub struct Cpu {
     executing: fn(&mut Cpu),
 }
 
-impl Registers {}
-
 impl Cpu {
     // {{{ Execute Functions
     pub fn decode(&mut self) -> fn(&mut Cpu) {
@@ -760,7 +758,7 @@ impl std::fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} mc: {:?}",
+            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?}",
             self.m(),
             self.t(),
             self.af(),
@@ -782,12 +780,14 @@ impl std::fmt::Display for Cpu {
             self.bcdh(),
             self.carry(),
             self.ir(),
+            self.wz(),
             self.mc(),
         )
     }
 }
 // }}}
 
+// {{{ Tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -966,6 +966,7 @@ mod tests {
     // }}}
 
     // {{{ Execute Tests
+    // {{{ test execute_nop
     #[test]
     fn execute_nop() {
         let mut cpu = Cpu::default();
@@ -975,7 +976,9 @@ mod tests {
         cpu.tick4();
         assert_eq!(cpu.pc(), 0x0003);
     }
+    // }}}
 
+    // {{{ test execute_ld_r16_imm16
     #[test]
     fn execute_ld_r16_imm16() {
         let mut cpu = Cpu::default();
@@ -1000,7 +1003,9 @@ mod tests {
         assert_eq!(cpu.hl(), 0x9ABC);
         assert_eq!(cpu.sp(), 0xDEF0);
     }
+    // }}}
 
+    // {{{ test execute_inc_r16
     #[test]
     fn execute_inc_r16() {
         let mut cpu = Cpu::default();
@@ -1021,7 +1026,9 @@ mod tests {
         assert_eq!(cpu.hl(), 1);
         assert_eq!(cpu.sp(), 1);
     }
+    // }}}
 
+    // {{{ test execute_dec_r16
     #[test]
     fn execute_dec_r16() {
         let mut cpu = Cpu::default();
@@ -1042,7 +1049,9 @@ mod tests {
         assert_eq!(cpu.hl(), 0xFFFF);
         assert_eq!(cpu.sp(), 0xFFFF);
     }
+    // }}}
 
+    // {{{ test execute_add_hl_r16
     #[test]
     fn execute_add_hl_r16() {
         let mut cpu = Cpu::default();
@@ -1069,7 +1078,9 @@ mod tests {
         assert_eq!(cpu.carry(), 0);
         assert_eq!(cpu.bcdh(), 1);
     }
+    // }}}
 
+    // {{{ test execute_inc_r8
     #[test]
     fn execute_inc_r8() {
         let mut cpu = Cpu::default();
@@ -1096,7 +1107,9 @@ mod tests {
         assert_eq!(cpu.l(), 1);
         assert_eq!(cpu.a(), 1);
     }
+    // }}}
 
+    // {{{ test execute_dec_r8
     #[test]
     fn execute_dec_r8() {
         let mut cpu = Cpu::default();
@@ -1126,3 +1139,4 @@ mod tests {
     }
     // }}}
 }
+// }}}
