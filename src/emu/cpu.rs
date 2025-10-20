@@ -52,6 +52,31 @@ impl R16 {
         }
     }
 }
+
+trait OverflowingAdd8 {
+    fn halfcarry_add(self, rhs: u8) -> (u8, bool, bool);
+}
+
+impl OverflowingAdd8 for u8 {
+    fn halfcarry_add(self, rhs: u8) -> (u8, bool, bool) {
+        let (result, carry) = self.overflowing_add(rhs);
+        let halfcarry = (self & 0x0F) + (rhs & 0x0F) > 0x0F;
+        (result, carry, halfcarry)
+    }
+}
+
+trait OverflowingSub8 {
+    fn halfcarry_sub(self, rhs: u8) -> (u8, bool, bool);
+}
+
+impl OverflowingSub8 for u8 {
+    fn halfcarry_sub(self, rhs: u8) -> (u8, bool, bool) {
+        let (result, carry) = self.overflowing_sub(rhs);
+        let halfcarry = (self & 0x0F) < (rhs & 0x0F);
+        (result, carry, halfcarry)
+    }
+}
+
 // }}}
 
 // {{{ Cycle Enums
@@ -117,6 +142,7 @@ impl Cpu {
             //
             0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
             0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
+            0x09 | 0x29 | 0x19 | 0x39 => Cpu::add_hl_r16,
             //
             0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
             0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
@@ -189,12 +215,32 @@ impl Cpu {
         }
     }
 
+    pub fn add_hl_r16(&mut self) {
+        match self.mc {
+            M2 => {
+                self.addr = 0x0000;
+                self.set_l(0);
+            }
+            M1 => {
+                let r16 = R16::from((self.ir() & M54) >> 4);
+
+                let result = self.r16(r16).wrapping_sub(1);
+                eprintln!("Decrementing {:?} to {:04x}", r16, result);
+
+                self.set_r16(r16, result);
+                self.fetch_next()
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("foo"),
+        }
+    }
+
     // {{{ opcode inc_r8
     pub fn inc_r8(&mut self) {
         match self.mc {
             M1 => {
                 let r8 = R8::from((self.ir() & M543) >> 3);
-                let (result, overflow) = self.r8(r8).overflowing_add(1);
+                let (result, _, halfcarry) = self.r8(r8).halfcarry_add(1);
 
                 eprintln!("Incrementing {:?} to {:02x}", r8, result);
 
@@ -206,10 +252,10 @@ impl Cpu {
 
                 self.set_bcdn(0);
 
-                if overflow {
-                    self.set_cy(1)
+                if halfcarry {
+                    self.set_bcdh(1)
                 } else {
-                    self.set_cy(0)
+                    self.set_bcdh(0)
                 }
 
                 self.set_r8(r8, result);
@@ -228,7 +274,7 @@ impl Cpu {
                 let r8 = R8::from((self.ir() & M543) >> 3);
                 eprintln!("dec_r8 r8:{:?}", r8);
 
-                let (result, overflow) = self.r8(r8).overflowing_sub(1);
+                let (result, _, halfcarry) = self.r8(r8).halfcarry_sub(1);
 
                 if result == 0 {
                     self.set_z(1)
@@ -238,10 +284,10 @@ impl Cpu {
 
                 self.set_bcdn(1);
 
-                if overflow {
-                    self.set_cy(1)
+                if halfcarry {
+                    self.set_bcdh(1)
                 } else {
-                    self.set_cy(0)
+                    self.set_bcdh(0)
                 }
 
                 self.set_r8(r8, result);
@@ -860,16 +906,16 @@ mod tests {
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.b(), 0);
-        assert_eq!(cpu.cy(), 1);
         assert_eq!(cpu.z(), 1);
+        cpu.set_b(0x0F);
         cpu.tick4();
-        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.bcdh(), 1);
         assert_eq!(cpu.z(), 0);
 
         for _ in 0..10 {
             cpu.tick4();
         }
-        assert_eq!(cpu.b(), 2);
+        assert_eq!(cpu.b(), 0x11);
         assert_eq!(cpu.c(), 1);
         assert_eq!(cpu.d(), 1);
         assert_eq!(cpu.e(), 1);
@@ -887,11 +933,12 @@ mod tests {
         cpu.tick4();
         cpu.tick4();
         assert_eq!(cpu.b(), 0);
-        assert_eq!(cpu.cy(), 0);
+        assert_eq!(cpu.bcdh(), 0);
         assert_eq!(cpu.z(), 1);
+        cpu.set_b(0x10);
         cpu.tick4();
-        assert_eq!(cpu.b(), 0xFF);
-        assert_eq!(cpu.cy(), 1);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.b(), 0x0F);
         assert_eq!(cpu.z(), 0);
 
         for _ in 0..10 {
