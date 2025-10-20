@@ -169,7 +169,9 @@ impl Cpu {
     }
 
     pub fn fetch_next(&mut self) {
-        self.set_ir(self.mem_read(self.pc()));
+        self.addr = self.pc();
+        self.data = self.mem_read();
+        self.set_ir(self.data);
         self.inc_pc();
         self.mc = M0;
         self.executing = self.decode();
@@ -192,12 +194,14 @@ impl Cpu {
         match self.mc {
             M3 => {
                 self.addr = self.pc();
-                self.set_z(self.mem_read(self.pc()));
+                self.data = self.mem_read();
+                self.set_z(self.data);
                 self.inc_pc();
             }
             M2 => {
                 self.addr = self.pc();
-                self.set_w(self.mem_read(self.pc()));
+                self.data = self.mem_read();
+                self.set_w(self.data);
                 self.inc_pc();
             }
             M1 => {
@@ -368,7 +372,12 @@ impl Cpu {
     // }}}
 
     // {{{ Memory Functions
-    pub fn mem_read(&self, addr: u16) -> u8 {
+
+    pub fn mem_read(&self) -> u8 {
+        self.mem[self.addr as usize]
+    }
+
+    pub fn mem_dbg_read(&self, addr: u16) -> u8 {
         self.mem[addr as usize]
     }
 
@@ -406,7 +415,7 @@ impl Cpu {
             R8::HL => todo!(
                 "Tried to retrieve [hl]: {:04x}:{:02x}",
                 self.hl(),
-                self.mem_read(self.hl())
+                self.mem_dbg_read(self.hl())
             ),
             R8::A => self.a(),
         }
@@ -898,28 +907,28 @@ mod tests {
     fn mem_write_read_vram() {
         let mut cpu = Cpu::default();
         cpu.mem_write(0x8000, 0xAB);
-        assert_eq!(cpu.mem_read(0x8000), 0xAB);
+        assert_eq!(cpu.mem_dbg_read(0x8000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_external_ram() {
         let mut cpu = Cpu::default();
         cpu.mem_write(0xA000, 0xAB);
-        assert_eq!(cpu.mem_read(0xA000), 0xAB);
+        assert_eq!(cpu.mem_dbg_read(0xA000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_work_ram() {
         let mut cpu = Cpu::default();
         cpu.mem_write(0xC000, 0xAB);
-        assert_eq!(cpu.mem_read(0xC000), 0xAB);
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_work_ram_bankable() {
         let mut cpu = Cpu::default();
         cpu.mem_write(0xD000, 0xAB);
-        assert_eq!(cpu.mem_read(0xD000), 0xAB);
+        assert_eq!(cpu.mem_dbg_read(0xD000), 0xAB);
     }
 
     #[test]
