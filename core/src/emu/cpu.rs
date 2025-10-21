@@ -172,6 +172,7 @@ impl Cpu {
             0x00 => Cpu::nop,
             0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
             0x02 | 0x22 | 0x12 | 0x32 => Cpu::ld_mr16mem_a,
+            0x0A | 0x2A | 0x1A | 0x3A => Cpu::ld_a_mr16mem,
             //
             0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
             0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
@@ -264,11 +265,11 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M4),
-            _ => panic!("foo"),
+            _ => panic!("Invalid mc in ld_r16_imm16: {:?}", self.mc),
         }
     }
     // }}}
-    // {{{ opcode ld_m_r16mem_a
+    // {{{ opcode ld_mr16mem_a
     pub fn ld_mr16mem_a(&mut self) {
         match self.mc {
             M2 => {
@@ -285,7 +286,30 @@ impl Cpu {
             }
             M1 => self.fetch_next(),
             M0 => self.set_mc(M3),
-            _ => panic!("foo"),
+            _ => panic!("Invalid mc in ld_mr16mem_a: {:?}", self.mc),
+        }
+    }
+
+    // {{{ opcode ld_a_mr16mem
+    pub fn ld_a_mr16mem(&mut self) {
+        match self.mc {
+            M2 => {
+                let r16mem = R16mem::from((self.ir() & M54) >> 4);
+                self.addr = self.r16mem(r16mem);
+                self.set_z(self.mem_read());
+
+                match r16mem {
+                    R16mem::HLi => self.set_hl(self.hl() + 1),
+                    R16mem::HLd => self.set_hl(self.hl() - 1),
+                    _ => (),
+                }
+            }
+            M1 => {
+                self.set_a(self.z());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in ld_a_mr16mem: {:?}", self.mc),
         }
     }
 

@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn execute_nop() {
         const ROM: &[u8] = gbasm! {r#"
-    nop
+  nop
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
@@ -260,6 +260,31 @@ mod tests {
     }
     // }}}
 
+    // {{{ test execute_ld_a_mr16mem
+    // }}}
+    #[test]
+    fn execute_ld_a_mr16mem() {
+        const ROM: &[u8] = gbasm! {r#"
+  inc a
+  ld bc, 0xC000
+  ld de, 0xC001
+  ld hl, 0xC005
+  ld [bc], a
+  dec a
+  ld a, [bc]
+  ld [de], a 
+  dec a
+  ld a, [de]
+  ld [hl-], a
+  dec a
+  ld hl, 0xC005
+  ld a, [hl+]
+  dec a
+            "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x01);
+    }
     // {{{ test execute_inc_r16
     #[test]
     fn execute_inc_r16() {
