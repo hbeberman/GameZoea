@@ -1,0 +1,15 @@
+[package]
+name = "macros"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[lib]
+proc-macro = true
+
+[dependencies.uuid]
+version = "1.18.1"
+features = [ 
+  "v4",
+]

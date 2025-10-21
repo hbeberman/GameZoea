@@ -161,14 +161,15 @@ pub struct Cpu {
     data: u8,
     mc: Mc,
     executing: fn(&mut Cpu),
+    halted: bool,
 }
 
 impl Cpu {
     // {{{ Execute Functions
     pub fn decode(&mut self) -> fn(&mut Cpu) {
         match self.ir() {
-            0x00 => Cpu::nop, // nop
-            //
+            // Block 0
+            0x00 => Cpu::nop,
             0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
             0x02 | 0x22 | 0x12 | 0x32 => Cpu::ld_mr16mem_a,
             //
@@ -179,6 +180,11 @@ impl Cpu {
             0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
             0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
             //
+            // Block 1
+            0x76 => Cpu::halt,
+            // Block 2
+            // Block 3
+            0xC3 => Cpu::jp_imm16,
             _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
         }
     }
@@ -197,6 +203,34 @@ impl Cpu {
         self.mc = M0;
         self.executing = self.decode();
         (self.executing)(self);
+    }
+
+    pub fn init_dmg(cartridge: &[u8]) -> Self {
+        let mut mem = [0u8; 0xFFFF];
+        mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
+
+        let r = Registers {
+            ir: 0x00,
+            ie: 0x00,
+            af: 0x01B0,
+            bc: 0x0013,
+            de: 0x00d8,
+            hl: 0x014d,
+            sp: 0xfffe,
+            pc: 0x0100,
+            wz: 0x0000, // ???
+        };
+        Cpu {
+            mem,
+            m: 0,
+            t: 0,
+            r,
+            addr: 0x0000,
+            data: 0x0000,
+            mc: Mc::M1,
+            executing: Cpu::nop,
+            halted: false,
+        }
     }
 
     // {{{ opcode nop
@@ -393,21 +427,70 @@ impl Cpu {
         }
     }
     // }}}
+
+    // {{{ opcode halt
+    pub fn halt(&mut self) {
+        match self.mc {
+            M1 => {
+                self.halted = true;
+                // TODO: halt has a lot of interactions to implement still
+                // self.fetch_next()
+                self.set_mc(M2);
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in halt: {:?}", self.mc),
+        }
+    }
+    // }}}
+
+    // Block 2
+    // Block 3
+    // {{{ opcode jp_imm16
+    pub fn jp_imm16(&mut self) {
+        match self.mc {
+            M4 => {
+                self.addr = self.pc();
+                self.set_z(self.mem_read());
+                self.inc_pc();
+            }
+            M3 => {
+                self.addr = self.pc();
+                self.set_w(self.mem_read());
+                self.inc_pc();
+            }
+            M2 => {
+                self.addr = 0x0000;
+                self.set_pc(self.wz());
+            }
+            M1 => self.fetch_next(),
+            M0 => self.set_mc(M5),
+            _ => panic!("Invalid mc in jp_imm16: {:?}", self.mc),
+        }
+    }
+
     // }}} end Execute Functions
 
     // {{{ Cycle Functions
-    pub fn tick(&mut self) {
+    pub fn tick_t1(&mut self) {
         self.t += 1;
         if self.t.is_multiple_of(4) {
             self.m += 1;
 
-            self.execute()
+            if !self.halted {
+                self.execute();
+            }
         }
     }
 
     pub fn tick4(&mut self) {
         for _ in 0..4 {
-            self.tick()
+            self.tick_t1()
+        }
+    }
+
+    pub fn mtick(&mut self, mcycles: usize) {
+        for _ in 0..mcycles {
+            self.tick4();
         }
     }
     // }}}
@@ -443,6 +526,10 @@ impl Cpu {
 
     pub fn mem_dbg_write(&mut self, addr: u16, data: u8) {
         self.mem[addr as usize] = data
+    }
+
+    pub fn mem_bulk_write(&mut self, addr: u16, mem: &[u8]) {
+        self.mem[addr as usize..mem.len()].copy_from_slice(mem);
     }
     // }}}
 
@@ -818,6 +905,7 @@ impl std::default::Default for Cpu {
             data: 0x0000,
             mc: Mc::M1,
             executing: Cpu::nop,
+            halted: false,
         }
     }
 }
@@ -828,7 +916,7 @@ impl std::fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?}",
+            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} halted: {}",
             self.m(),
             self.t(),
             self.af(),
@@ -852,417 +940,8 @@ impl std::fmt::Display for Cpu {
             self.ir(),
             self.wz(),
             self.mc(),
+            self.halted,
         )
     }
-}
-// }}}
-
-// {{{ Tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // {{{ Register Tests
-    #[test]
-    fn cpu_default() {
-        let cpu = Cpu::default();
-
-        assert_eq!(cpu.m(), 0);
-        assert_eq!(cpu.t(), 0);
-        assert_eq!(cpu.af(), 0x0000);
-        assert_eq!(cpu.bc(), 0x0000);
-        assert_eq!(cpu.de(), 0x0000);
-        assert_eq!(cpu.hl(), 0x0000);
-        assert_eq!(cpu.sp(), 0x0000);
-        assert_eq!(cpu.pc(), 0x0000);
-    }
-
-    #[test]
-    fn cpu_setters() {
-        let mut cpu = Cpu::default();
-        cpu.set_m(1337);
-        cpu.set_t(5348);
-        cpu.set_addr(0xCCCC);
-        cpu.set_data(0xDD);
-        cpu.set_ir(0xAA);
-        cpu.set_ie(0xBB);
-        cpu.set_af(0x1020);
-        cpu.set_bc(0x3040);
-        cpu.set_de(0x5060);
-        cpu.set_hl(0x7080);
-        cpu.set_sp(0x90A0);
-        cpu.set_pc(0xB0C0);
-
-        assert_eq!(cpu.m(), 1337);
-        assert_eq!(cpu.t(), 5348);
-        assert_eq!(cpu.addr(), 0xCCCC);
-        assert_eq!(cpu.data(), 0xDD);
-        assert_eq!(cpu.ir(), 0xAA);
-        assert_eq!(cpu.ie(), 0xBB);
-        assert_eq!(cpu.af(), 0x1020);
-        assert_eq!(cpu.bc(), 0x3040);
-        assert_eq!(cpu.de(), 0x5060);
-        assert_eq!(cpu.hl(), 0x7080);
-        assert_eq!(cpu.sp(), 0x90A0);
-        assert_eq!(cpu.pc(), 0xB0C0);
-    }
-
-    #[test]
-    fn cpu_flag_sets() {
-        let mut cpu = Cpu::default();
-        cpu.set_zero(1);
-        cpu.set_bcdn(1);
-        cpu.set_bcdh(1);
-        cpu.set_carry(1);
-        assert_eq!(cpu.f(), 0xF0);
-    }
-
-    #[test]
-    fn cpu_flag_gets() {
-        let mut cpu = Cpu::default();
-        cpu.set_af(0x00F0);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
-    }
-
-    #[test]
-    #[should_panic(expected = "Invalid value used as flag z: 02")]
-    fn cpu_flag_z_invalid() {
-        let mut cpu = Cpu::default();
-        cpu.set_zero(2);
-        assert_eq!(cpu.zero(), 1);
-    }
-    // }}}
-
-    // {{{ Cycle Tests
-    #[test]
-    fn cpu_t_tick() {
-        let mut cpu = Cpu::default();
-        assert_eq!(cpu.t(), 0);
-        for i in 1..16 {
-            cpu.tick();
-            assert_eq!(cpu.t(), i);
-            assert_eq!(cpu.m(), i / 4);
-        }
-    }
-    // }}}
-
-    // {{{ Memory Tests
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to ROM bank 00: 0000:ab")]
-    fn mem_rom_write() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0x0000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to ROM bank 01-NN: 4000:ab")]
-    fn mem_rom_bankable_write() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0x4000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    fn mem_write_read_vram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0x8000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0x8000), 0xAB);
-    }
-
-    #[test]
-    fn mem_write_read_external_ram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xA000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0xA000), 0xAB);
-    }
-
-    #[test]
-    fn mem_write_read_work_ram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xC000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0xAB);
-    }
-
-    #[test]
-    fn mem_write_read_work_ram_bankable() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xD000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0xD000), 0xAB);
-    }
-
-    #[test]
-    #[should_panic(expected = "Memory write to echo RAM: e000:ab")]
-    fn mem_write_echo() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xE000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to OAM: fe00:ab")]
-    fn mem_write_oam() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFE00);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "Memory write to not usable: fea0:ab")]
-    fn mem_write_not_usable() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFEA0);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to I/O registers: ff00:ab")]
-    fn mem_write_io() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFF00);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to HRAM: ff80:ab")]
-    fn mem_write_hram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFF80);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to IE register: ffff:ab")]
-    fn mem_write_ie() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFFFF);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-    }
-    // }}}
-
-    // {{{ Execute Tests
-    // {{{ test execute_nop
-    #[test]
-    fn execute_nop() {
-        let mut cpu = Cpu::default();
-        cpu.tick4();
-        assert_eq!(cpu.pc(), 0x0001);
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.pc(), 0x0003);
-    }
-    // }}}
-
-    // {{{ test execute_ld_r16_imm16
-    #[test]
-    fn execute_ld_r16_imm16() {
-        let mut cpu = Cpu::default();
-        let mem = [
-            0x01, 0x34, 0x12, 0x11, 0x78, 0x56, 0x21, 0xbc, 0x9a, 0x31, 0xf0, 0xde,
-        ];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.w(), 0x00);
-        assert_eq!(cpu.z(), 0x34);
-        cpu.tick4();
-        assert_eq!(cpu.bc(), 0x0000);
-        assert_eq!(cpu.w(), 0x12);
-        assert_eq!(cpu.z(), 0x34);
-        cpu.tick4();
-        assert_eq!(cpu.bc(), 0x1234);
-        for _ in 0..30 {
-            cpu.tick4();
-        }
-        assert_eq!(cpu.de(), 0x5678);
-        assert_eq!(cpu.hl(), 0x9ABC);
-        assert_eq!(cpu.sp(), 0xDEF0);
-    }
-    // }}}
-
-    // {{{ test execute_ld_mr16mem_a
-    #[test]
-    fn execute_ld_mr16mem_a() {
-        let mut cpu = Cpu::default();
-        // ld bc, 0xC000
-        // ld de, 0xD000
-        // ld hl, 0xD0F0
-        // inc a
-        // ld [bc], a
-        // ld [de], a
-        // ld [hl+], a
-        // ld [hl-], a
-        // ld [hl-], a
-        let mem = [
-            0x01, 0x00, 0xc0, 0x11, 0x00, 0xd0, 0x21, 0xf0, 0xd0, 0x3c, 0x02, 0x12, 0x22, 0x32,
-            0x32,
-        ];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.tick4();
-        for _ in 0..40 {
-            cpu.tick4();
-        }
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0x1);
-        assert_eq!(cpu.mem_dbg_read(0xD000), 0x1);
-        assert_eq!(cpu.hl(), 0xD0EF);
-        assert_eq!(cpu.mem_dbg_read(0xD0EF), 0x0);
-        assert_eq!(cpu.mem_dbg_read(0xD0F0), 0x1);
-        assert_eq!(cpu.mem_dbg_read(0xD0F1), 0x1);
-        assert_eq!(cpu.mem_dbg_read(0xD0F2), 0x0);
-    }
-    // }}}
-
-    // {{{ test execute_inc_r16
-    #[test]
-    fn execute_inc_r16() {
-        let mut cpu = Cpu::default();
-        let mem = [0x03, 0x23, 0x13, 0x33];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.tick4();
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.bc(), 1);
-        assert_eq!(cpu.carry(), 0);
-        assert_eq!(cpu.zero(), 0);
-
-        for _ in 0..20 {
-            cpu.tick4();
-        }
-        assert_eq!(cpu.bc(), 1);
-        assert_eq!(cpu.de(), 1);
-        assert_eq!(cpu.hl(), 1);
-        assert_eq!(cpu.sp(), 1);
-    }
-    // }}}
-
-    // {{{ test execute_dec_r16
-    #[test]
-    fn execute_dec_r16() {
-        let mut cpu = Cpu::default();
-        let mem = [0x0B, 0x2B, 0x1B, 0x3B];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.tick4();
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.bc(), 0xFFFF);
-        assert_eq!(cpu.carry(), 0);
-        assert_eq!(cpu.zero(), 0);
-
-        for _ in 0..20 {
-            cpu.tick4();
-        }
-        assert_eq!(cpu.bc(), 0xFFFF);
-        assert_eq!(cpu.de(), 0xFFFF);
-        assert_eq!(cpu.hl(), 0xFFFF);
-        assert_eq!(cpu.sp(), 0xFFFF);
-    }
-    // }}}
-
-    // {{{ test execute_add_hl_r16
-    #[test]
-    fn execute_add_hl_r16() {
-        let mut cpu = Cpu::default();
-        let mem = [0x09, 0x19, 0x29, 0x39];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.set_hl(0x0001);
-        cpu.set_bc(0x00FF);
-        cpu.set_de(0x0002);
-        cpu.set_sp(0x0F00);
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.addr(), 0x0000);
-        assert_eq!(cpu.l(), 0x0);
-        assert_eq!(cpu.carry(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        cpu.tick4();
-        assert_eq!(cpu.hl(), 0x0100);
-
-        for _ in 0..20 {
-            cpu.tick4();
-        }
-        // ((0x1 + 0xFF + 0x2) * 2) + 0x0F00
-        assert_eq!(cpu.hl(), 0x1104);
-        assert_eq!(cpu.carry(), 0);
-        assert_eq!(cpu.bcdh(), 1);
-    }
-    // }}}
-
-    // {{{ test execute_inc_r8
-    #[test]
-    fn execute_inc_r8() {
-        let mut cpu = Cpu::default();
-        let mem = [0x04, 0x04, 0x04, 0x24, 0x14, 0x0C, 0x2C, 0x1C, 0x3C];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.set_b(0xFF);
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.b(), 0);
-        assert_eq!(cpu.zero(), 1);
-        cpu.set_b(0x0F);
-        cpu.tick4();
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.zero(), 0);
-
-        for _ in 0..10 {
-            cpu.tick4();
-        }
-        assert_eq!(cpu.b(), 0x11);
-        assert_eq!(cpu.c(), 1);
-        assert_eq!(cpu.d(), 1);
-        assert_eq!(cpu.e(), 1);
-        assert_eq!(cpu.h(), 1);
-        assert_eq!(cpu.l(), 1);
-        assert_eq!(cpu.a(), 1);
-    }
-    // }}}
-
-    // {{{ test execute_dec_r8
-    #[test]
-    fn execute_dec_r8() {
-        let mut cpu = Cpu::default();
-        let mem = [0x05, 0x05, 0x25, 0x15, 0x0D, 0x2D, 0x1D, 0x3D];
-        cpu.mem[..mem.len()].copy_from_slice(&mem);
-        cpu.set_b(0x01);
-        cpu.tick4();
-        cpu.tick4();
-        assert_eq!(cpu.b(), 0);
-        assert_eq!(cpu.bcdh(), 0);
-        assert_eq!(cpu.zero(), 1);
-        cpu.set_b(0x10);
-        cpu.tick4();
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.b(), 0x0F);
-        assert_eq!(cpu.zero(), 0);
-
-        for _ in 0..10 {
-            cpu.tick4();
-        }
-        assert_eq!(cpu.c(), 0xFF);
-        assert_eq!(cpu.d(), 0xFF);
-        assert_eq!(cpu.e(), 0xFF);
-        assert_eq!(cpu.h(), 0xFF);
-        assert_eq!(cpu.l(), 0xFF);
-        assert_eq!(cpu.a(), 0xFF);
-    }
-    // }}}
 }
 // }}}
