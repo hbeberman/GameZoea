@@ -2,6 +2,7 @@ use macros::*;
 use std::fmt;
 
 #[allow(dead_code)]
+const M43: u8 = 0b00011000;
 const M54: u8 = 0b00110000;
 const M543: u8 = 0b00111000;
 
@@ -70,6 +71,26 @@ impl R16mem {
             2 => R16mem::HLi,
             3 => R16mem::HLd,
             _ => panic!("Invalid r16 operand: {:02x}", r16),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cond {
+    NZ,
+    Z,
+    NC,
+    C,
+}
+
+impl Cond {
+    pub fn from(cond: u8) -> Self {
+        match cond {
+            0 => Cond::NZ,
+            1 => Cond::Z,
+            2 => Cond::NC,
+            3 => Cond::C,
+            _ => panic!("Invalid cond operand: {:02x}", cond),
         }
     }
 }
@@ -167,7 +188,7 @@ pub struct Cpu {
 
 impl Cpu {
     // {{{ Execute Functions
-    pub fn decode(&mut self) -> fn(&mut Cpu) {
+    pub fn decode(&self) -> fn(&mut Cpu) {
         #[allow(clippy::manual_range_patterns)]
         match self.ir() {
             // Block 0
@@ -230,9 +251,10 @@ impl Cpu {
     }
 
     pub fn execute(&mut self) {
-        eprintln!("Execute called!\n{}", self);
+        eprintln!("Execute Invoked!\n{}", self);
         (self.executing)(self);
         self.mc = self.mc.next();
+        eprintln!("Execute Resolved!\n{}", self);
     }
 
     pub fn fetch_next(&mut self) {
@@ -246,13 +268,8 @@ impl Cpu {
     }
 
     pub fn fetch_next_addr(&mut self, addr: u16) {
-        self.addr = addr;
-        self.mem_read();
-        self.set_ir(self.data);
-        self.inc_pc();
-        self.mc = M0;
-        self.executing = self.decode();
-        (self.executing)(self);
+        self.set_pc(addr);
+        self.fetch_next();
     }
 
     pub fn init_dmg(cartridge: &[u8]) -> Self {
@@ -803,11 +820,49 @@ impl Cpu {
     // {{{ opcode jr_cond_imm8
     pub fn jr_cond_imm8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                if self.cond(Cond::from((self.ir() & M43) >> 3)) {
+                    // ??? are the lower 8 bits of addr ignored by IDU here?
+                    self.addr = (self.pch() as u16) << 8;
+                    let zsign = self.z() >> 7 == 0x01;
+                    let (r, c) = self.z().overflowing_add(self.pcl());
+                    self.set_z(r);
+                    self.data = r;
+                    let w = if c && !zsign {
+                        self.pch() + 1
+                    } else if !c && zsign {
+                        self.pch() - 1
+                    } else {
+                        self.pch()
+                    };
+                    self.set_w(w);
+                } else {
+                    self.addr = self.pc();
+                    self.mem_read();
+                    self.set_z(self.data());
+                    self.inc_pc();
+                }
+            }
+            M1 => {
+                if self.cond(Cond::from((self.ir() & M43) >> 3)) {
+                    self.fetch_next_addr(self.wz());
+                } else {
+                    self.fetch_next();
+                }
+            }
+            M0 => {
+                if self.cond(Cond::from((self.ir() & M43) >> 3)) {
+                    self.set_mc(M4)
+                } else {
+                    self.set_mc(M3)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1160,6 +1215,15 @@ impl Cpu {
 
     pub fn carry(&self) -> u8 {
         ((self.r.af & 0x10) >> 4) as u8
+    }
+
+    pub fn cond(&self, cond: Cond) -> bool {
+        match cond {
+            Cond::NZ => self.zero() == 0,
+            Cond::Z => self.zero() == 1,
+            Cond::NC => self.carry() == 0,
+            Cond::C => self.carry() == 1,
+        }
     }
 
     pub fn bc(&self) -> u16 {

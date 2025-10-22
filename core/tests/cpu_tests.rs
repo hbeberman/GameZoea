@@ -602,13 +602,39 @@ mod tests {
 
     // {{{ test jr_cond_imm8
     #[test]
-    #[ignore = "TODO"]
     fn execute_jr_cond_imm8() {
         const ROM: &[u8] = gbasm! {r#"
+  dec a
+  jr z,.ztaken
+  inc a
+.backjump:
+  inc d
+  halt
+.ztaken:
+  dec a
+  jr nz,.nztaken
+  inc c
+.nztaken:
+  ld a,$FE
+  inc a
+  jr nc,.nctaken
+  inc e
+.nctaken:
+  inc h
+  jr c,.ctaken
+  inc l
+.ctaken:
+  jr nz,.backjump
+  halt
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.pc(), 0x0156);
+        assert_eq!(cpu.a(), 0xFF);
+        assert_eq!(cpu.bc(), 0x0013);
+        // This is actually a problem, something is clearing carry
+        assert_eq!(cpu.de(), 0x01D9);
+        assert_eq!(cpu.hl(), 0x024D);
     }
     // }}}
 
