@@ -245,6 +245,16 @@ impl Cpu {
         (self.executing)(self);
     }
 
+    pub fn fetch_next_addr(&mut self, addr: u16) {
+        self.addr = addr;
+        self.mem_read();
+        self.set_ir(self.data);
+        self.inc_pc();
+        self.mc = M0;
+        self.executing = self.decode();
+        (self.executing)(self);
+    }
+
     pub fn init_dmg(cartridge: &[u8]) -> Self {
         let mut mem = [0u8; 0xFFFF];
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
@@ -761,11 +771,30 @@ impl Cpu {
     // {{{ opcode jr_imm8
     pub fn jr_imm8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                // ??? are the lower 8 bits of addr ignored by IDU here?
+                self.addr = (self.pch() as u16) << 8;
+                let zsign = self.z() >> 7 == 0x01;
+                let (r, c) = self.z().overflowing_add(self.pcl());
+                self.set_z(r);
+                self.data = r;
+                let w = if c && !zsign {
+                    self.pch() + 1
+                } else if !c && zsign {
+                    self.pch() - 1
+                } else {
+                    self.pch()
+                };
+                self.set_w(w);
+            }
+            M0 => self.set_mc(M4),
+            M1 => self.fetch_next_addr(self.wz()),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1177,6 +1206,14 @@ impl Cpu {
         self.r.pc
     }
 
+    pub fn pch(&self) -> u8 {
+        ((self.r.pc & 0xFF00) >> 8) as u8
+    }
+
+    pub fn pcl(&self) -> u8 {
+        self.r.pc as u8
+    }
+
     pub fn wz(&self) -> u16 {
         self.r.wz
     }
@@ -1347,6 +1384,14 @@ impl Cpu {
 
     pub fn set_pc(&mut self, pc: u16) {
         self.r.pc = pc
+    }
+
+    pub fn set_pch(&mut self, pch: u8) {
+        self.r.pc = self.r.pc & 0x00FF | (pch as u16) << 8
+    }
+
+    pub fn set_pcl(&mut self, pcl: u8) {
+        self.r.pc = self.r.pc & 0xFF00 | (pcl as u16)
     }
 
     pub fn inc_pc(&mut self) {

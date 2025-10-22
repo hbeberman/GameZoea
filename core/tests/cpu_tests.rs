@@ -578,13 +578,25 @@ mod tests {
 
     // {{{ test jr_imm8
     #[test]
-    #[ignore = "TODO"]
     fn execute_jr_imm8() {
         const ROM: &[u8] = gbasm! {r#"
+  jr .skipinc
+  inc a
+.deadend
+  inc de
+  inc bc
+  halt
+.skipinc
+  inc hl
+  jr .deadend
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.pc(), 0x0156);
+        assert_eq!(cpu.a(), 0x01);
+        assert_eq!(cpu.bc(), 0x0014);
+        assert_eq!(cpu.de(), 0x00D9);
+        assert_eq!(cpu.hl(), 0x014E);
     }
     // }}}
 
