@@ -371,9 +371,9 @@ mod tests {
     }
     // }}}
 
-    // {{{ test execute_inc_r8
+    // {{{ test execute_inc_r8_and_inc_mhl
     #[test]
-    fn execute_inc_r8() {
+    fn execute_inc_r8_and_inc_mhl() {
         const ROM: &[u8] = gbasm! {r#"
   inc a
   inc l
@@ -382,12 +382,15 @@ mod tests {
   inc d
   inc c
   inc b
+  ld hl, 0xC000
+  ld [hl], 0x00
+  inc [hl]
+  ld hl, 0x024e
   inc l
   inc l
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x015A);
         assert_eq!(cpu.sp(), 0xFFFE);
         assert_eq!(cpu.a(), 0x02);
         assert_eq!(cpu.bc(), 0x0114);
@@ -397,33 +400,37 @@ mod tests {
         assert_eq!(cpu.carry(), 1);
         assert_eq!(cpu.bcdh(), 1);
         assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0x01);
     }
     // }}}
 
-    // {{{ test execute_dec_r8
+    // {{{ test execute_dec_r8_and_dec_mhl
     #[test]
-    fn execute_dec_r8() {
+    fn execute_dec_r8_and_dec_mhl() {
         const ROM: &[u8] = gbasm! {r#"
   dec a
-  dec l
-  dec h
   dec e
   dec d
   dec c
+  ld hl, 0xC000
+  ld [hl], 0x00
+  dec [hl]
+  dec l
+  dec h
   dec b
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0158);
         assert_eq!(cpu.sp(), 0xFFFE);
         assert_eq!(cpu.a(), 0x00);
         assert_eq!(cpu.bc(), 0xFF12);
         assert_eq!(cpu.de(), 0xFFD7);
-        assert_eq!(cpu.hl(), 0x004C);
+        assert_eq!(cpu.hl(), 0xBFFF);
         assert_eq!(cpu.zero(), 0);
         assert_eq!(cpu.carry(), 1);
         assert_eq!(cpu.bcdh(), 1);
         assert_eq!(cpu.bcdn(), 1);
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0xFF);
     }
     // }}}
 

@@ -181,7 +181,9 @@ impl Cpu {
             0x09 | 0x29 | 0x19 | 0x39 => Cpu::add_hl_r16,
             //
             0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
+            0x34 => Cpu::inc_mhl,
             0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
+            0x35 => Cpu::dec_mhl,
             //
             0x06 | 0x26 | 0x16 | 0x0E | 0x2E | 0x1E | 0x3E => Cpu::ld_r8_imm8,
             0x36 => Cpu::ld_mhl_imm8,
@@ -474,6 +476,33 @@ impl Cpu {
     }
     // }}}
 
+    // {{{ opcode inc_mhl
+    pub fn inc_mhl(&mut self) {
+        match self.mc {
+            M3 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
+            }
+            M2 => {
+                let (result, _, h, z) = self.z().halfcarry_add(1);
+
+                eprintln!("Incrementing [{:?}] to {:02x}", self.hl(), result);
+
+                self.set_zero(z);
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+
+                self.data = result;
+                self.mem_write();
+            }
+            M1 => self.fetch_next(),
+            M0 => self.set_mc(M4),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
     // {{{ opcode dec_r8
     pub fn dec_r8(&mut self) {
         match self.mc {
@@ -491,6 +520,33 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode inc_mhl
+    pub fn dec_mhl(&mut self) {
+        match self.mc {
+            M3 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
+            }
+            M2 => {
+                let (result, _, h, z) = self.z().halfcarry_sub(1);
+
+                eprintln!("Decrementing [{:?}] to {:02x}", self.hl(), result);
+
+                self.set_zero(z);
+                self.set_bcdn(1);
+                self.set_bcdh(h);
+
+                self.data = result;
+                self.mem_write();
+            }
+            M1 => self.fetch_next(),
+            M0 => self.set_mc(M4),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
