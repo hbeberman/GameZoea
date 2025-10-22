@@ -719,8 +719,10 @@ impl Cpu {
     pub fn cpl(&mut self) {
         match self.mc {
             M1 => {
+                self.set_a(self.a() ^ 0xFF);
+                self.set_bcdn(1);
+                self.set_bcdh(1);
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -732,8 +734,8 @@ impl Cpu {
     pub fn scf(&mut self) {
         match self.mc {
             M1 => {
+                self.set_carry(1);
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -745,8 +747,10 @@ impl Cpu {
     pub fn ccf(&mut self) {
         match self.mc {
             M1 => {
+                self.set_carry(self.carry() ^ 1);
+                self.set_bcdn(0);
+                self.set_bcdh(0);
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),

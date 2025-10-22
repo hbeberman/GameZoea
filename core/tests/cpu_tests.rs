@@ -532,37 +532,47 @@ mod tests {
 
     // {{{ test cpl
     #[test]
-    #[ignore = "TODO"]
     fn execute_cpl() {
         const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  cpl
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x5A);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.bcdn(), 1);
     }
     // }}}
 
     // {{{ test scf
     #[test]
-    #[ignore = "TODO"]
     fn execute_scf() {
         const ROM: &[u8] = gbasm! {r#"
+  inc a
+  scf
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x02);
+        assert_eq!(cpu.carry(), 1);
     }
     // }}}
 
     // {{{ test ccf
     #[test]
-    #[ignore = "TODO"]
     fn execute_ccf() {
         const ROM: &[u8] = gbasm! {r#"
+  ld a, 0x10
+  dec a
+  ccf
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x0F);
+        assert_eq!(cpu.carry(), 0);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 0);
     }
     // }}}
 
