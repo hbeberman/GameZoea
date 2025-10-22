@@ -1,6 +1,6 @@
 use gamezoea::emu::cpu::*;
 use macros::*;
-// {{{ Tests
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,7 +202,6 @@ mod tests {
     }
     // }}}
 
-    // {{{ Execute Tests
     // {{{ test execute_nop
     #[test]
     fn execute_nop() {
@@ -261,7 +260,6 @@ mod tests {
     // }}}
 
     // {{{ test execute_ld_a_mr16mem
-    // }}}
     #[test]
     fn execute_ld_a_mr16mem() {
         const ROM: &[u8] = gbasm! {r#"
@@ -285,6 +283,22 @@ mod tests {
         cpu.mtick(200);
         assert_eq!(cpu.a(), 0x01);
     }
+    // }}}
+
+    // {{{ test execute_ld_mimm16_sp
+    #[test]
+    fn execute_ld_mimm16_sp() {
+        const ROM: &[u8] = gbasm! {r#"
+  ld [0xC000], sp
+            "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.pc(), 0x0154);
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0xFE);
+        assert_eq!(cpu.mem_dbg_read(0xC001), 0xFF);
+    }
+    // }}}
+
     // {{{ test execute_inc_r16
     #[test]
     fn execute_inc_r16() {
@@ -446,4 +460,3 @@ SkipIncA:
     }
     // }}}
 }
-// }}}

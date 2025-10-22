@@ -1,3 +1,4 @@
+use macros::*;
 use std::fmt;
 
 #[allow(dead_code)]
@@ -173,6 +174,7 @@ impl Cpu {
             0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
             0x02 | 0x22 | 0x12 | 0x32 => Cpu::ld_mr16mem_a,
             0x0A | 0x2A | 0x1A | 0x3A => Cpu::ld_a_mr16mem,
+            0x08 => Cpu::ld_mimm16_sp,
             //
             0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
             0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
@@ -198,7 +200,7 @@ impl Cpu {
 
     pub fn fetch_next(&mut self) {
         self.addr = self.pc();
-        self.data = self.mem_read();
+        self.mem_read();
         self.set_ir(self.data);
         self.inc_pc();
         self.mc = M0;
@@ -239,7 +241,7 @@ impl Cpu {
         match self.mc {
             Mc::M1 => self.fetch_next(),
             Mc::M0 => self.set_mc(M2),
-            _ => panic!("Invalid mc in nop: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -250,13 +252,13 @@ impl Cpu {
         match self.mc {
             M3 => {
                 self.addr = self.pc();
-                self.data = self.mem_read();
+                self.mem_read();
                 self.set_z(self.data);
                 self.inc_pc();
             }
             M2 => {
                 self.addr = self.pc();
-                self.data = self.mem_read();
+                self.mem_read();
                 self.set_w(self.data);
                 self.inc_pc();
             }
@@ -265,10 +267,11 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M4),
-            _ => panic!("Invalid mc in ld_r16_imm16: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
+
     // {{{ opcode ld_mr16mem_a
     pub fn ld_mr16mem_a(&mut self) {
         match self.mc {
@@ -286,9 +289,10 @@ impl Cpu {
             }
             M1 => self.fetch_next(),
             M0 => self.set_mc(M3),
-            _ => panic!("Invalid mc in ld_mr16mem_a: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
+    // }}}
 
     // {{{ opcode ld_a_mr16mem
     pub fn ld_a_mr16mem(&mut self) {
@@ -296,7 +300,8 @@ impl Cpu {
             M2 => {
                 let r16mem = R16mem::from((self.ir() & M54) >> 4);
                 self.addr = self.r16mem(r16mem);
-                self.set_z(self.mem_read());
+                self.mem_read();
+                self.set_z(self.data);
 
                 match r16mem {
                     R16mem::HLi => self.set_hl(self.hl() + 1),
@@ -309,9 +314,45 @@ impl Cpu {
                 self.fetch_next();
             }
             M0 => self.set_mc(M3),
-            _ => panic!("Invalid mc in ld_a_mr16mem: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
+    // }}}
+
+    // {{{ opcode ld_mimm16_sp
+    pub fn ld_mimm16_sp(&mut self) {
+        match self.mc {
+            M5 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M4 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_pc();
+            }
+            M3 => {
+                self.addr = self.wz();
+                self.data = self.lo(R16::SP);
+                self.mem_write();
+                self.set_wz(self.wz() + 1);
+            }
+            M2 => {
+                self.addr = self.wz();
+                self.data = self.hi(R16::SP);
+                self.mem_write();
+            }
+            M1 => {
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M6),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
 
     // {{{ opcode inc_r16
     pub fn inc_r16(&mut self) {
@@ -329,7 +370,7 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M3),
-            _ => panic!("foo"),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -350,7 +391,7 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M3),
-            _ => panic!("foo"),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -403,7 +444,7 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M3),
-            _ => panic!("foo"),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -425,7 +466,7 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M2),
-            _ => panic!("Invalid mc in inc_r8: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -447,7 +488,7 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M2),
-            _ => panic!("Invalid mc in dec_r8: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -462,7 +503,7 @@ impl Cpu {
                 self.set_mc(M2);
             }
             M0 => self.set_mc(M2),
-            _ => panic!("Invalid mc in halt: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
     // }}}
@@ -474,12 +515,14 @@ impl Cpu {
         match self.mc {
             M4 => {
                 self.addr = self.pc();
-                self.set_z(self.mem_read());
+                self.mem_read();
+                self.set_z(self.data);
                 self.inc_pc();
             }
             M3 => {
                 self.addr = self.pc();
-                self.set_w(self.mem_read());
+                self.mem_read();
+                self.set_w(self.data);
                 self.inc_pc();
             }
             M2 => {
@@ -488,7 +531,7 @@ impl Cpu {
             }
             M1 => self.fetch_next(),
             M0 => self.set_mc(M5),
-            _ => panic!("Invalid mc in jp_imm16: {:?}", self.mc),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
 
@@ -520,9 +563,8 @@ impl Cpu {
     // }}}
 
     // {{{ Memory Functions
-
-    pub fn mem_read(&self) -> u8 {
-        self.mem[self.addr as usize]
+    pub fn mem_read(&mut self) {
+        self.data = self.mem[self.addr as usize];
     }
 
     pub fn mem_dbg_read(&self, addr: u16) -> u8 {
