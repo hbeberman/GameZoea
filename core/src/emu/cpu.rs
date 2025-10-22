@@ -183,6 +183,9 @@ impl Cpu {
             0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
             0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
             //
+            0x06 | 0x26 | 0x16 | 0x0E | 0x2E | 0x1E | 0x3E => Cpu::ld_r8_imm8,
+            0x36 => Cpu::ld_mhl_imm8,
+            //
             // Block 1
             0x76 => Cpu::halt,
             // Block 2
@@ -488,6 +491,47 @@ impl Cpu {
                 self.fetch_next()
             }
             M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode_ld_r8_imm8
+    pub fn ld_r8_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M1 => {
+                let r8 = R8::from((self.ir() & M543) >> 3);
+                self.set_r8(r8, self.z());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode_ld_mhl_imm8
+    pub fn ld_mhl_imm8(&mut self) {
+        match self.mc {
+            M3 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M2 => {
+                self.addr = self.hl();
+                self.data = self.z();
+                self.mem_write();
+            }
+            M1 => self.fetch_next(),
+            M0 => self.set_mc(M4),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }

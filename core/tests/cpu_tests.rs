@@ -427,6 +427,31 @@ mod tests {
     }
     // }}}
 
+    // {{{ test ld_r8_imm8_and_ld_mhl_imm8
+    #[test]
+    fn execute_ld_r8_imm8_and_ld_mhl_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xc000
+  ld [hl], 0xA5
+  ld b, 0x01
+  ld c, 0x02
+  ld d, 0x03
+  ld e, 0x04
+  ld h, 0x05
+  ld l, 0x06
+  ld a, 0x00
+            "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.pc(), 0x0164);
+        assert_eq!(cpu.bc(), 0x0102);
+        assert_eq!(cpu.de(), 0x0304);
+        assert_eq!(cpu.hl(), 0x0506);
+        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0xA5);
+    }
+    // }}}
+
     // {{{ test halt
     #[test]
     fn execute_halt() {
