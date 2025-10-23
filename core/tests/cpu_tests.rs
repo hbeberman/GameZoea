@@ -652,7 +652,6 @@ mod tests {
 
     // {{{ test ld_r8_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_ld_r8_r8() {
         const ROM: &[u8] = gbasm! {r#"
   ld b, a
@@ -673,6 +672,22 @@ mod tests {
         assert_eq!(cpu.e(), 0x01);
         assert_eq!(cpu.h(), 0x01);
         assert_eq!(cpu.l(), 0x01);
+    }
+    // }}}
+
+    // {{{ test ld_r8_mhl_and_ld_mhl_r8
+    #[test]
+    fn execute_ld_r8_mhl_and_ld_mhl_r8() {
+        const ROM: &[u8] = gbasm! {r#"
+    ld hl, 0xC000
+    ld [hl], a
+    ld b, [hl]
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x01);
+        assert_eq!(cpu.mem_dbg_read(0xC000), 0x01);
+        assert_eq!(cpu.b(), 0x01);
     }
     // }}}
 

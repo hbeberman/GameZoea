@@ -226,12 +226,13 @@ impl Cpu {
             0x10 => Cpu::stop,
 
             // Block 1
-            0x40 | 0x60 | 0x50 | 0x70 | 0x48 | 0x68 | 0x58 | 0x78 | 0x44 | 0x64 | 0x54 | 0x74
-            | 0x4C | 0x6C | 0x5C | 0x7C | 0x42 | 0x62 | 0x52 | 0x72 | 0x4A | 0x6A | 0x5A | 0x7A
-            | 0x46 | 0x66 | 0x56 | 0x4E | 0x6E | 0x5E | 0x7E | 0x41 | 0x61 | 0x51 | 0x71 | 0x49
-            | 0x69 | 0x59 | 0x79 | 0x45 | 0x65 | 0x55 | 0x75 | 0x4D | 0x6D | 0x5D | 0x7D | 0x43
-            | 0x63 | 0x53 | 0x73 | 0x4B | 0x6B | 0x5B | 0x7B | 0x47 | 0x67 | 0x57 | 0x77 | 0x4F
-            | 0x6F | 0x5F | 0x7F => Cpu::ld_r8_r8,
+            0x40 | 0x60 | 0x50 | 0x48 | 0x68 | 0x58 | 0x78 | 0x44 | 0x64 | 0x54 | 0x4C | 0x6C
+            | 0x5C | 0x7C | 0x42 | 0x62 | 0x52 | 0x4A | 0x6A | 0x5A | 0x7A | 0x41 | 0x61 | 0x51
+            | 0x49 | 0x69 | 0x59 | 0x79 | 0x45 | 0x65 | 0x55 | 0x4D | 0x6D | 0x5D | 0x7D | 0x43
+            | 0x63 | 0x53 | 0x4B | 0x6B | 0x5B | 0x7B | 0x47 | 0x67 | 0x57 | 0x4F | 0x6F | 0x5F
+            | 0x7F => Cpu::ld_r8_r8,
+            0x46 | 0x66 | 0x56 | 0x4E | 0x6E | 0x5E | 0x7E => Cpu::ld_r8_mhl,
+            0x70 | 0x74 | 0x72 | 0x71 | 0x75 | 0x73 | 0x77 => Cpu::ld_mhl_r8,
             //
             0x76 => Cpu::halt,
 
@@ -894,6 +895,43 @@ impl Cpu {
                 self.fetch_next();
             }
             M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ld_r8_mhl
+    pub fn ld_r8_mhl(&mut self) {
+        match self.mc {
+            M2 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
+            }
+            M1 => {
+                let r8_dest = R8::from((self.ir() & M543) >> 3);
+                self.set_r8(r8_dest, self.z());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ld_mhl_r8
+    pub fn ld_mhl_r8(&mut self) {
+        match self.mc {
+            M2 => {
+                let r8_source = R8::from(self.ir() & M210);
+                self.addr = self.hl();
+                self.data = self.r8(r8_source);
+                self.mem_write();
+            }
+            M1 => {
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
