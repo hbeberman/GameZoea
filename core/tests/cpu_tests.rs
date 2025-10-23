@@ -716,6 +716,7 @@ mod tests {
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
         assert_eq!(cpu.a(), 0x28);
+        assert_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -733,6 +734,7 @@ mod tests {
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
         assert_eq!(cpu.a(), 0xDA);
+        assert_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -750,30 +752,46 @@ mod tests {
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
         assert_eq!(cpu.a(), 0x2B);
+        assert_eq!(cpu.bcdn(), 1);
     }
     // }}}
 
     // {{{ test sbc_a_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_sbc_a_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0xff
+  ld [hl], b
+  sbc a, [hl]
+  sbc a, b
+  sbc a, e
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x28);
+        assert_eq!(cpu.bcdn(), 1);
     }
     // }}}
 
     // {{{ test and_a_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_and_a_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0xDE
+  ld a, 0xFF
+  ld [hl], b
+  and a, [hl]
+  and a, c
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x12);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 0);
     }
     // }}}
 
