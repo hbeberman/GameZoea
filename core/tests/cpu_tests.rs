@@ -655,10 +655,24 @@ mod tests {
     #[ignore = "TODO"]
     fn execute_ld_r8_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld b, a
+  ld c, b
+  ld d, c
+  ld e, d
+  ld h, e
+  ld l, h
+  inc a
+  ld a, l
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x01);
+        assert_eq!(cpu.b(), 0x01);
+        assert_eq!(cpu.c(), 0x01);
+        assert_eq!(cpu.d(), 0x01);
+        assert_eq!(cpu.e(), 0x01);
+        assert_eq!(cpu.h(), 0x01);
+        assert_eq!(cpu.l(), 0x01);
     }
     // }}}
 

@@ -5,6 +5,7 @@ use std::fmt;
 const M43: u8 = 0b00011000;
 const M54: u8 = 0b00110000;
 const M543: u8 = 0b00111000;
+const M210: u8 = 0b00000111;
 
 // {{{ Register Enums
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -887,8 +888,10 @@ impl Cpu {
     pub fn ld_r8_r8(&mut self) {
         match self.mc {
             M1 => {
+                let r8_source = R8::from(self.ir() & M210);
+                let r8_dest = R8::from((self.ir() & M543) >> 3);
+                self.set_r8(r8_dest, self.r8(r8_source));
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
