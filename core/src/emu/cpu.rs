@@ -237,8 +237,8 @@ impl Cpu {
             0x76 => Cpu::halt,
 
             // Block 2
-            0x80 | 0x84 | 0x82 | 0x86 | 0x81 | 0x85 | 0x83 | 0x87 => Cpu::add_a_r8,
-            0x88 | 0x8C | 0x8A | 0x8E | 0x89 | 0x8D | 0x8B | 0x8F => Cpu::adc_a_r8,
+            0x80 | 0x84 | 0x82 | 0x81 | 0x85 | 0x83 | 0x86 | 0x87 => Cpu::add_a_r8,
+            0x88 | 0x8C | 0x8A | 0x89 | 0x8D | 0x8B | 0x8E | 0x8F => Cpu::adc_a_r8,
             0x90 | 0x94 | 0x92 | 0x96 | 0x91 | 0x95 | 0x93 | 0x97 => Cpu::sub_a_r8,
             0x98 | 0x9C | 0x9A | 0x9E | 0x99 | 0x9D | 0x9B | 0x9F => Cpu::sbc_a_r8,
             0xA0 | 0xA4 | 0xA2 | 0xA6 | 0xA1 | 0xA5 | 0xA3 | 0xA7 => Cpu::and_a_r8,
@@ -957,11 +957,34 @@ impl Cpu {
     // {{{ opcode add_a_r8
     pub fn add_a_r8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M2 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
             }
-            M0 => self.set_mc(M2),
+            M1 => {
+                let r8_operand = R8::from(self.ir() & M210);
+                let (r, c, h, _) = match r8_operand {
+                    R8::HL => self.a().halfcarry_add(self.z()),
+                    _ => self.a().halfcarry_add(self.r8(r8_operand)),
+                };
+                self.set_a(r);
+
+                if r == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.fetch_next();
+            }
+            M0 => match R8::from(self.ir() & M210) {
+                R8::HL => self.set_mc(M3),
+                _ => self.set_mc(M2),
+            },
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -970,11 +993,35 @@ impl Cpu {
     // {{{ opcode adc_a_r8
     pub fn adc_a_r8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M2 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
             }
-            M0 => self.set_mc(M2),
+            M1 => {
+                let r8_operand = R8::from(self.ir() & M210);
+                let (r1, c1, h1, _) = match r8_operand {
+                    R8::HL => self.a().halfcarry_add(self.z()),
+                    _ => self.a().halfcarry_add(self.r8(r8_operand)),
+                };
+                let (r2, c2, h2, _) = r1.halfcarry_add(self.carry());
+                self.set_a(r2);
+
+                if r2 == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(h1 | h2);
+                self.set_carry(c1 | c2);
+
+                self.fetch_next();
+            }
+            M0 => match R8::from(self.ir() & M210) {
+                R8::HL => self.set_mc(M3),
+                _ => self.set_mc(M2),
+            },
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
