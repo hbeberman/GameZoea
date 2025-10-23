@@ -738,13 +738,18 @@ mod tests {
 
     // {{{ test sub_a_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_sub_a_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0xff
+  ld [hl], b
+  sub a, [hl]
+  sub a, b
+  sub a, e
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x2B);
     }
     // }}}
 

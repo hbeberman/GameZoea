@@ -964,17 +964,13 @@ impl Cpu {
             }
             M1 => {
                 let r8_operand = R8::from(self.ir() & M210);
-                let (r, c, h, _) = match r8_operand {
+                let (r, c, h, z) = match r8_operand {
                     R8::HL => self.a().halfcarry_add(self.z()),
                     _ => self.a().halfcarry_add(self.r8(r8_operand)),
                 };
                 self.set_a(r);
 
-                if r == 0 {
-                    self.set_zero(1);
-                } else {
-                    self.set_zero(0);
-                }
+                self.set_zero(z);
                 self.set_bcdn(0);
                 self.set_bcdh(h);
                 self.set_carry(c);
@@ -1004,14 +1000,10 @@ impl Cpu {
                     R8::HL => self.a().halfcarry_add(self.z()),
                     _ => self.a().halfcarry_add(self.r8(r8_operand)),
                 };
-                let (r2, c2, h2, _) = r1.halfcarry_add(self.carry());
+                let (r2, c2, h2, z) = r1.halfcarry_add(self.carry());
                 self.set_a(r2);
 
-                if r2 == 0 {
-                    self.set_zero(1);
-                } else {
-                    self.set_zero(0);
-                }
+                self.set_zero(z);
                 self.set_bcdn(0);
                 self.set_bcdh(h1 | h2);
                 self.set_carry(c1 | c2);
@@ -1030,11 +1022,30 @@ impl Cpu {
     // {{{ opcode sub_a_r8
     pub fn sub_a_r8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M2 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
             }
-            M0 => self.set_mc(M2),
+            M1 => {
+                let r8_operand = R8::from(self.ir() & M210);
+                let (r, c, h, z) = match r8_operand {
+                    R8::HL => self.a().halfcarry_sub(self.z()),
+                    _ => self.a().halfcarry_sub(self.r8(r8_operand)),
+                };
+                self.set_a(r);
+
+                self.set_zero(z);
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.fetch_next();
+            }
+            M0 => match R8::from(self.ir() & M210) {
+                R8::HL => self.set_mc(M3),
+                _ => self.set_mc(M2),
+            },
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
