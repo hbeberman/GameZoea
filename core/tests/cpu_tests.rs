@@ -797,37 +797,70 @@ mod tests {
 
     // {{{ test xor_a_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_xor_a_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0xDE
+  ld a, 0xFF
+  ld [hl], b
+  xor a, [hl]
+  xor a, c
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x32);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 0);
+        assert_eq!(cpu.carry(), 0);
     }
     // }}}
 
     // {{{ test or_a_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_or_a_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0x5C
+  ld a, 0x2A
+  ld [hl], b
+  or a, [hl]
+  or a, c
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x7F);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 0);
+        assert_eq!(cpu.carry(), 0);
     }
     // }}}
 
     // {{{ test cp_a_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_cp_a_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0x5C
+  ld a, 0x2A
+  ld [hl], b
+  cp a, a
+  jr z, .skip
+  inc a
+.skip
+  cp a, [hl]
+  jr c, .skip2
+  inc a
+.skip2
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.a(), 0x2A);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 1);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 1);
     }
     // }}}
 
