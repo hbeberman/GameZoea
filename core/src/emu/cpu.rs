@@ -247,6 +247,14 @@ impl Cpu {
             0xB8 | 0xBC | 0xBA | 0xBE | 0xB9 | 0xBD | 0xBB | 0xBF => Cpu::cp_a_r8,
 
             // Block 3
+            0xC6 => Cpu::add_a_imm8,
+            0xCE => Cpu::adc_a_imm8,
+            0xD6 => Cpu::sub_a_imm8,
+            0xDE => Cpu::sbc_a_imm8,
+            0xE6 => Cpu::and_a_imm8,
+            0xEE => Cpu::xor_a_imm8,
+            0xF6 => Cpu::or_a_imm8,
+            0xFE => Cpu::cp_a_imm8,
             0xC3 => Cpu::jp_imm16,
             _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
         }
@@ -272,6 +280,13 @@ impl Cpu {
     pub fn fetch_next_addr(&mut self, addr: u16) {
         self.set_pc(addr);
         self.fetch_next();
+    }
+
+    pub fn pop_imm8_into_z(&mut self) {
+        self.addr = self.pc();
+        self.mem_read();
+        self.set_z(self.data);
+        self.inc_pc();
     }
 
     pub fn init_dmg(cartridge: &[u8]) -> Self {
@@ -617,10 +632,7 @@ impl Cpu {
     pub fn ld_r8_imm8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.pc();
-                self.mem_read();
-                self.set_z(self.data);
-                self.inc_pc();
+                self.pop_imm8_into_z();
             }
             M1 => {
                 let r8 = R8::from((self.ir() & M543) >> 3);
@@ -1227,6 +1239,204 @@ impl Cpu {
     // }}}
 
     // Block 3
+
+    // {{{ opcode add_a_imm8
+    pub fn add_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let (r, c, h, z) = self.a().halfcarry_add(self.z());
+                self.set_a(r);
+
+                self.set_zero(z);
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode adc_a_imm8
+    pub fn adc_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let (r1, c1, h1, _) = self.a().halfcarry_add(self.z());
+                let (r2, c2, h2, z) = r1.halfcarry_add(self.carry());
+                self.set_a(r2);
+
+                self.set_zero(z);
+                self.set_bcdn(0);
+                self.set_bcdh(h1 | h2);
+                self.set_carry(c1 | c2);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode sub_a_imm8
+    pub fn sub_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let (r, c, h, z) = self.a().halfcarry_sub(self.z());
+                self.set_a(r);
+
+                self.set_zero(z);
+                self.set_bcdn(1);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode sbc_a_imm8
+    pub fn sbc_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let (r1, c1, h1, _) = self.a().halfcarry_sub(self.z());
+                let (r2, c2, h2, z) = r1.halfcarry_sub(self.carry());
+                self.set_a(r2);
+
+                self.set_zero(z);
+                self.set_bcdn(1);
+                self.set_bcdh(h1 | h2);
+                self.set_carry(c1 | c2);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode and_a_imm8
+    pub fn and_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let r = self.a() & self.z();
+                self.set_a(r);
+
+                if r == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(1);
+                self.set_carry(0);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode xor_a_imm8
+    pub fn xor_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let r = self.a() ^ self.z();
+                self.set_a(r);
+
+                if r == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(0);
+                self.set_carry(0);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode or_a_imm8
+    pub fn or_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let r = self.a() | self.z();
+                self.set_a(r);
+
+                if r == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(0);
+                self.set_carry(0);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode cp_a_imm8
+    pub fn cp_a_imm8(&mut self) {
+        match self.mc {
+            M2 => {
+                self.pop_imm8_into_z();
+            }
+            M1 => {
+                let (_, c, h, z) = self.a().halfcarry_sub(self.z());
+
+                self.set_zero(z);
+                self.set_bcdn(1);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
     // {{{ opcode jp_imm16
     pub fn jp_imm16(&mut self) {
         match self.mc {

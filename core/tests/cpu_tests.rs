@@ -864,6 +864,133 @@ mod tests {
     }
     // }}}
 
+    // {{{ test add_a_imm8
+    #[test]
+    fn execute_add_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  add a, 0xFF
+    "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x00);
+        assert_eq!(cpu.zero(), 1);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 1);
+    }
+    // }}}
+
+    // {{{ test adc_a_imm8
+    #[test]
+    fn execute_adc_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  adc a, 0xFF
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x01);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 1);
+    }
+    // }}}
+
+    // {{{ test sub_a_imm8
+    #[test]
+    fn execute_sub_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  sub a, 0xFF
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x02);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 1);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 1);
+    }
+    // }}}
+
+    // {{{ test sbc_a_imm8
+    #[test]
+    fn execute_sbc_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  sbc a, 0xFD
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x03);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 1);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 1);
+    }
+    // }}}
+
+    // {{{ test and_a_imm8
+    #[test]
+    fn execute_and_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  and a, 0x05
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x05);
+        assert_eq!(cpu.zero(), 0);
+        assert_eq!(cpu.bcdn(), 0);
+        assert_eq!(cpu.bcdh(), 1);
+        assert_eq!(cpu.carry(), 0);
+    }
+    // }}}
+
+    // {{{ test xor_a_imm8
+    #[test]
+    fn execute_xor_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  xor a, 0x06
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0xA3);
+    }
+    // }}}
+
+    // {{{ test or_a_imm8
+    #[test]
+    fn execute_or_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  or a, 0x16
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0xB7);
+    }
+    // }}}
+
+    // {{{ test cp_a_imm8
+    #[test]
+    fn execute_cp_a_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+  ld a, 0x2A
+  cp a, 0x2A
+  jr z, .skip
+  inc a
+.skip
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_eq!(cpu.a(), 0x2A);
+        assert_eq!(cpu.zero(), 1);
+        assert_eq!(cpu.bcdn(), 1);
+        assert_eq!(cpu.bcdh(), 0);
+        assert_eq!(cpu.carry(), 0);
+    }
+    // }}}
+
     // {{{ test jp_imm16
     #[test]
     fn execute_jp_imm16() {
