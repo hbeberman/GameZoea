@@ -1581,11 +1581,58 @@ impl Cpu {
     // {{{ opcode call_cond_imm16
     pub fn call_cond_imm16(&mut self) {
         match self.mc {
+            M6 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M5 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_pc();
+            }
+            M4 => {
+                self.set_sp(self.sp() - 1);
+            }
+            M3 => {
+                if self.cond() {
+                    self.set_addr(self.sp());
+                    eprintln!("!!!!!SELF.PCH IS THIS {}", self.pch());
+                    self.data = self.pch();
+                    self.mem_write();
+                    self.set_sp(self.sp() - 1);
+                } else {
+                    self.addr = self.pc();
+                    self.mem_read();
+                    self.set_z(self.data);
+                    self.inc_pc();
+                }
+            }
+            M2 => {
+                if self.cond() {
+                    self.set_addr(self.sp());
+                    self.data = self.pcl();
+                    self.mem_write();
+                    self.set_pc(self.wz());
+                } else {
+                    self.addr = self.pc();
+                    self.mem_read();
+                    self.set_w(self.data);
+                    self.inc_pc();
+                }
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => {
+                if self.cond() {
+                    self.set_mc(M7)
+                } else {
+                    self.set_mc(M4)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1594,11 +1641,37 @@ impl Cpu {
     // {{{ opcode call_imm16
     pub fn call_imm16(&mut self) {
         match self.mc {
+            M6 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M5 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_pc();
+            }
+            M4 => {
+                self.set_sp(self.sp() - 1);
+            }
+            M3 => {
+                self.set_addr(self.sp());
+                self.data = self.pch();
+                self.mem_write();
+                self.set_sp(self.sp() - 1);
+            }
+            M2 => {
+                self.set_addr(self.sp());
+                self.data = self.pcl();
+                self.mem_write();
+                self.set_pc(self.wz());
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M7),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1693,7 +1766,7 @@ impl Cpu {
             0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
             0xFF00..0xFF80 => todo!("Memory write to I/O registers: {:04x}:{:02x}", addr, data),
-            0xFF80..0xFFFF => todo!("Memory write to HRAM: {:04x}:{:02x}", addr, data),
+            0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
             0xFFFF => todo!("Memory write to IE register: {:04x}:{:02x}", addr, data),
         }
     }

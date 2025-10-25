@@ -189,12 +189,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to HRAM: ff80:ab")]
     fn mem_write_hram() {
         let mut cpu = Cpu::default();
         cpu.set_addr(0xFF80);
         cpu.set_data(0xAB);
         cpu.mem_write();
+        assert_hex_eq!(cpu.mem_dbg_read(0xFF80), 0xAB);
     }
 
     #[test]
@@ -1100,25 +1100,42 @@ SkipIncA:
 
     // {{{ test call_cond_imm16
     #[test]
-    #[ignore = "TODO"]
     fn execute_call_cond_imm16() {
         const ROM: &[u8] = gbasm! {r#"
+  call nz,.foo
+  inc a
+  call c,.foo
+  inc a
+  inc a
+  halt
+.foo
+  inc a
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x03);
+        assert_hex_eq!(cpu.sp(), 0xFFFC);
+        assert_hex_eq!(cpu.pc(), 0x15C);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFC), 0x57);
     }
     // }}}
 
     // {{{ test call_imm16
     #[test]
-    #[ignore = "TODO"]
     fn execute_call_imm16() {
         const ROM: &[u8] = gbasm! {r#"
+  call .foo
+  halt
+.foo
+  inc a
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.pc(), 0x0156);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFC), 0x53);
     }
     // }}}
 
