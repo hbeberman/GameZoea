@@ -1165,13 +1165,15 @@ SkipIncA:
 
     // {{{ test rst_tgt3
     #[test]
-    #[ignore = "TODO"]
     fn execute_rst_tgt3() {
         const ROM: &[u8] = gbasm! {r#"
+  rst 0x18
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        cpu.mtick(7);
+        assert_hex_eq!(cpu.pc(), 0x151);
+        cpu.mtick(1);
+        assert_hex_eq!(cpu.pc(), 0x18);
     }
     // }}}
 }

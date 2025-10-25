@@ -1735,11 +1735,23 @@ impl Cpu {
     // {{{ opcode rst_tgt3
     pub fn rst_tgt3(&mut self) {
         match self.mc {
+            M4 => self.dec_sp(),
+            M3 => {
+                self.set_addr(self.sp());
+                self.data = self.pch();
+                self.mem_write();
+                self.dec_sp();
+            }
+            M2 => {
+                self.set_addr(self.sp());
+                self.data = self.pcl();
+                self.mem_write();
+                self.set_pc((self.ir() & M543) as u16);
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
