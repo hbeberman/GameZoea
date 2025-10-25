@@ -182,6 +182,7 @@ pub struct Cpu {
     r: Registers,
     addr: u16,
     data: u8,
+    ime: u8,
     mc: Mc,
     executing: fn(&mut Cpu),
     halted: bool,
@@ -322,6 +323,7 @@ impl Cpu {
             r,
             addr: 0x0000,
             data: 0x0000,
+            ime: 0,
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
@@ -1451,11 +1453,37 @@ impl Cpu {
     // {{{ opcode ret_cond
     pub fn ret_cond(&mut self) {
         match self.mc {
+            M5 => self.addr = 0x0000,
+            M4 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_sp();
+            }
+            M3 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_sp();
+            }
+            M2 => {
+                if self.cond() {
+                    self.addr = 0x0000;
+                    self.set_pc(self.wz());
+                } else {
+                    self.addr = 0x0000;
+                }
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => {
+                if self.cond() {
+                    self.set_mc(M6)
+                } else {
+                    self.set_mc(M3)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1464,11 +1492,26 @@ impl Cpu {
     // {{{ opcode ret
     pub fn ret(&mut self) {
         match self.mc {
+            M4 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_sp();
+            }
+            M3 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_sp();
+            }
+            M2 => {
+                self.addr = 0x0000;
+                self.set_pc(self.wz());
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1477,11 +1520,27 @@ impl Cpu {
     // {{{ opcode reti
     pub fn reti(&mut self) {
         match self.mc {
+            M4 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_sp();
+            }
+            M3 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_sp();
+            }
+            M2 => {
+                self.addr = 0x0000;
+                self.set_pc(self.wz());
+                self.set_ime(1);
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1593,16 +1652,14 @@ impl Cpu {
                 self.set_w(self.data);
                 self.inc_pc();
             }
-            M4 => {
-                self.set_sp(self.sp() - 1);
-            }
+            M4 => self.dec_sp(),
             M3 => {
                 if self.cond() {
                     self.set_addr(self.sp());
                     eprintln!("!!!!!SELF.PCH IS THIS {}", self.pch());
                     self.data = self.pch();
                     self.mem_write();
-                    self.set_sp(self.sp() - 1);
+                    self.dec_sp();
                 } else {
                     self.addr = self.pc();
                     self.mem_read();
@@ -1653,14 +1710,12 @@ impl Cpu {
                 self.set_w(self.data);
                 self.inc_pc();
             }
-            M4 => {
-                self.set_sp(self.sp() - 1);
-            }
+            M4 => self.dec_sp(),
             M3 => {
                 self.set_addr(self.sp());
                 self.data = self.pch();
                 self.mem_write();
-                self.set_sp(self.sp() - 1);
+                self.dec_sp();
             }
             M2 => {
                 self.set_addr(self.sp());
@@ -1854,6 +1909,10 @@ impl Cpu {
         self.data
     }
 
+    pub fn ime(&self) -> u8 {
+        self.ime
+    }
+
     pub fn af(&self) -> u16 {
         self.r.af
     }
@@ -2037,6 +2096,10 @@ impl Cpu {
         self.data = data
     }
 
+    pub fn set_ime(&mut self, ime: u8) {
+        self.ime = ime
+    }
+
     pub fn set_ir(&mut self, ir: u8) {
         self.r.ir = ir
     }
@@ -2121,6 +2184,14 @@ impl Cpu {
         self.r.sp = sp
     }
 
+    pub fn inc_sp(&mut self) {
+        self.r.sp += 1;
+    }
+
+    pub fn dec_sp(&mut self) {
+        self.r.sp -= 1;
+    }
+
     pub fn set_pc(&mut self, pc: u16) {
         self.r.pc = pc
     }
@@ -2177,6 +2248,7 @@ impl std::default::Default for Cpu {
             r,
             addr: 0x0000,
             data: 0x0000,
+            ime: 0,
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
@@ -2190,7 +2262,7 @@ impl std::fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} halted: {}",
+            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} ime: {} halted: {}",
             self.m(),
             self.t(),
             self.af(),
@@ -2214,6 +2286,7 @@ impl std::fmt::Display for Cpu {
             self.ir(),
             self.wz(),
             self.mc(),
+            self.ime(),
             self.halted,
         )
     }

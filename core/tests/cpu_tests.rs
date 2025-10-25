@@ -998,37 +998,61 @@ mod tests {
 
     // {{{ test ret_cond
     #[test]
-    #[ignore = "TODO"]
     fn execute_ret_cond() {
         const ROM: &[u8] = gbasm! {r#"
+  call z, .foo
+  inc a
+  halt
+.foo
+  ret nz
+  inc b
+  ret nz
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.b(), 0x01);
+        assert_hex_eq!(cpu.pc(), 0x155);
+        assert_hex_eq!(cpu.sp(), 0xFFFE);
+        assert_hex_eq!(cpu.ime(), 0);
     }
     // }}}
 
     // {{{ test ret
     #[test]
-    #[ignore = "TODO"]
     fn execute_ret() {
         const ROM: &[u8] = gbasm! {r#"
+  call z, .foo
+  inc a
+  halt
+.foo
+  ret
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.pc(), 0x155);
+        assert_hex_eq!(cpu.sp(), 0xFFFE);
+        assert_hex_eq!(cpu.ime(), 0);
     }
     // }}}
 
     // {{{ test reti
     #[test]
-    #[ignore = "TODO"]
     fn execute_reti() {
         const ROM: &[u8] = gbasm! {r#"
+  call z, .foo
+  inc a
+  halt
+.foo
+  reti
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.pc(), 0x155);
+        assert_hex_eq!(cpu.sp(), 0xFFFE);
+        assert_hex_eq!(cpu.ime(), 1);
     }
     // }}}
 
