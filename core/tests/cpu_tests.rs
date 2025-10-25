@@ -1082,13 +1082,19 @@ SkipIncA:
 
     // {{{ test jp_hl
     #[test]
-    #[ignore = "TODO"]
     fn execute_jp_hl() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, .foo
+  jp hl
+  halt
+.foo
+  inc a
+  halt
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.pc(), 0x0157);
     }
     // }}}
 

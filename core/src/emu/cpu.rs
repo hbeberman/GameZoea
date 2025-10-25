@@ -1564,8 +1564,13 @@ impl Cpu {
     pub fn jp_hl(&mut self) {
         match self.mc {
             M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_ir(self.data());
+                self.set_pc(self.hl() + 1);
+                self.set_mc(M0);
+                self.executing = self.decode();
+                (self.executing)(self);
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
