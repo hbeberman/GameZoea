@@ -255,7 +255,18 @@ impl Cpu {
             0xEE => Cpu::xor_a_imm8,
             0xF6 => Cpu::or_a_imm8,
             0xFE => Cpu::cp_a_imm8,
+            //
+            0xC0 | 0xD0 | 0xC8 | 0xD8 => Cpu::ret_cond,
+            0xC9 => Cpu::ret,
+            0xD9 => Cpu::reti,
+            0xC2 | 0xD2 | 0xCA | 0xDA => Cpu::jp_cond_imm16,
             0xC3 => Cpu::jp_imm16,
+            0xE9 => Cpu::jp_hl,
+            0xC4 | 0xD4 | 0xCC | 0xDC => Cpu::call_cond_imm16,
+            0xCD => Cpu::call_imm16,
+            0xC7 | 0xE7 | 0xD7 | 0xF7 | 0xCF | 0xEF | 0xDF | 0xFF => Cpu::rst_tgt3,
+            0xC1 | 0xE1 | 0xD1 | 0xF1 => Cpu::pop_r16stk,
+            0xC5 | 0xE5 | 0xD5 | 0xF5 => Cpu::push_r16stk,
             _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
         }
     }
@@ -841,7 +852,7 @@ impl Cpu {
                 self.inc_pc();
             }
             M2 => {
-                if self.cond(Cond::from((self.ir() & M43) >> 3)) {
+                if self.cond() {
                     // ??? are the lower 8 bits of addr ignored by IDU here?
                     self.addr = (self.pch() as u16) << 8;
                     let zsign = self.z() >> 7 == 0x01;
@@ -864,14 +875,14 @@ impl Cpu {
                 }
             }
             M1 => {
-                if self.cond(Cond::from((self.ir() & M43) >> 3)) {
+                if self.cond() {
                     self.fetch_next_addr(self.wz());
                 } else {
                     self.fetch_next();
                 }
             }
             M0 => {
-                if self.cond(Cond::from((self.ir() & M43) >> 3)) {
+                if self.cond() {
                     self.set_mc(M4)
                 } else {
                     self.set_mc(M3)
@@ -1437,6 +1448,93 @@ impl Cpu {
     }
     // }}}
 
+    // {{{ opcode ret_cond
+    pub fn ret_cond(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ret
+    pub fn ret(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode reti
+    pub fn reti(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode jp_cond_imm16
+    pub fn jp_cond_imm16(&mut self) {
+        match self.mc {
+            M4 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M3 => {
+                if self.cond() {
+                    self.addr = self.pc();
+                    self.mem_read();
+                    self.set_w(self.data);
+                    self.inc_pc();
+                } else {
+                    self.addr = self.pc();
+                    self.mem_read();
+                    self.set_z(self.data);
+                    self.inc_pc();
+                }
+            }
+            M2 => {
+                if self.cond() {
+                    self.addr = 0x0000;
+                    self.set_pc(self.wz());
+                } else {
+                    self.addr = self.pc();
+                    self.mem_read();
+                    self.set_w(self.data);
+                    self.inc_pc();
+                }
+            }
+            M1 => {
+                self.fetch_next();
+            }
+            M0 => {
+                if self.cond() {
+                    self.set_mc(M5)
+                } else {
+                    self.set_mc(M4)
+                }
+            }
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
     // {{{ opcode jp_imm16
     pub fn jp_imm16(&mut self) {
         match self.mc {
@@ -1461,6 +1559,84 @@ impl Cpu {
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
+
+    // {{{ opcode jp_hl
+    pub fn jp_hl(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode call_cond_imm16
+    pub fn call_cond_imm16(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode call_imm16
+    pub fn call_imm16(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode rst_tgt3
+    pub fn rst_tgt3(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode pop_r16stk
+    pub fn pop_r16stk(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode push_r16stk
+    pub fn push_r16stk(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
 
     // }}} end Execute Functions
 
@@ -1636,13 +1812,15 @@ impl Cpu {
         ((self.r.af & 0x10) >> 4) as u8
     }
 
-    pub fn cond(&self, cond: Cond) -> bool {
-        match cond {
+    pub fn cond(&self) -> bool {
+        let res = match Cond::from((self.ir() & M43) >> 3) {
             Cond::NZ => self.zero() == 0,
             Cond::Z => self.zero() == 1,
             Cond::NC => self.carry() == 0,
             Cond::C => self.carry() == 1,
-        }
+        };
+        eprintln!("COND IS {}", res);
+        res
     }
 
     pub fn bc(&self) -> u16 {

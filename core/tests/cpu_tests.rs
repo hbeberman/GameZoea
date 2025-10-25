@@ -1,5 +1,10 @@
 use gamezoea::emu::cpu::*;
 use macros::*;
+macro_rules! assert_hex_eq {
+    ($a:expr, $b:expr) => {
+        assert!($a == $b, "assertion failed: {:#06x} != {:#06x}", $a, $b);
+    };
+}
 
 #[cfg(test)]
 mod tests {
@@ -10,14 +15,14 @@ mod tests {
     fn cpu_default() {
         let cpu = Cpu::default();
 
-        assert_eq!(cpu.m(), 0);
-        assert_eq!(cpu.t(), 0);
-        assert_eq!(cpu.af(), 0x0000);
-        assert_eq!(cpu.bc(), 0x0000);
-        assert_eq!(cpu.de(), 0x0000);
-        assert_eq!(cpu.hl(), 0x0000);
-        assert_eq!(cpu.sp(), 0x0000);
-        assert_eq!(cpu.pc(), 0x0000);
+        assert_hex_eq!(cpu.m(), 0);
+        assert_hex_eq!(cpu.t(), 0);
+        assert_hex_eq!(cpu.af(), 0x0000);
+        assert_hex_eq!(cpu.bc(), 0x0000);
+        assert_hex_eq!(cpu.de(), 0x0000);
+        assert_hex_eq!(cpu.hl(), 0x0000);
+        assert_hex_eq!(cpu.sp(), 0x0000);
+        assert_hex_eq!(cpu.pc(), 0x0000);
     }
 
     #[test]
@@ -36,18 +41,18 @@ mod tests {
         cpu.set_sp(0x90A0);
         cpu.set_pc(0xB0C0);
 
-        assert_eq!(cpu.m(), 1337);
-        assert_eq!(cpu.t(), 5348);
-        assert_eq!(cpu.addr(), 0xCCCC);
-        assert_eq!(cpu.data(), 0xDD);
-        assert_eq!(cpu.ir(), 0xAA);
-        assert_eq!(cpu.ie(), 0xBB);
-        assert_eq!(cpu.af(), 0x1020);
-        assert_eq!(cpu.bc(), 0x3040);
-        assert_eq!(cpu.de(), 0x5060);
-        assert_eq!(cpu.hl(), 0x7080);
-        assert_eq!(cpu.sp(), 0x90A0);
-        assert_eq!(cpu.pc(), 0xB0C0);
+        assert_hex_eq!(cpu.m(), 1337);
+        assert_hex_eq!(cpu.t(), 5348);
+        assert_hex_eq!(cpu.addr(), 0xCCCC);
+        assert_hex_eq!(cpu.data(), 0xDD);
+        assert_hex_eq!(cpu.ir(), 0xAA);
+        assert_hex_eq!(cpu.ie(), 0xBB);
+        assert_hex_eq!(cpu.af(), 0x1020);
+        assert_hex_eq!(cpu.bc(), 0x3040);
+        assert_hex_eq!(cpu.de(), 0x5060);
+        assert_hex_eq!(cpu.hl(), 0x7080);
+        assert_hex_eq!(cpu.sp(), 0x90A0);
+        assert_hex_eq!(cpu.pc(), 0xB0C0);
     }
 
     #[test]
@@ -57,17 +62,17 @@ mod tests {
         cpu.set_bcdn(1);
         cpu.set_bcdh(1);
         cpu.set_carry(1);
-        assert_eq!(cpu.f(), 0xF0);
+        assert_hex_eq!(cpu.f(), 0xF0);
     }
 
     #[test]
     fn cpu_flag_gets() {
         let mut cpu = Cpu::default();
         cpu.set_af(0x00F0);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
     }
 
     #[test]
@@ -75,7 +80,7 @@ mod tests {
     fn cpu_flag_z_invalid() {
         let mut cpu = Cpu::default();
         cpu.set_zero(2);
-        assert_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.zero(), 1);
     }
     // }}}
 
@@ -83,11 +88,11 @@ mod tests {
     #[test]
     fn cpu_t_tick() {
         let mut cpu = Cpu::default();
-        assert_eq!(cpu.t(), 0);
+        assert_hex_eq!(cpu.t(), 0);
         for i in 1..16 {
             cpu.tick_t1();
-            assert_eq!(cpu.t(), i);
-            assert_eq!(cpu.m(), i / 4);
+            assert_hex_eq!(cpu.t(), i);
+            assert_hex_eq!(cpu.m(), i / 4);
         }
     }
     // }}}
@@ -117,7 +122,7 @@ mod tests {
         cpu.set_addr(0x8000);
         cpu.set_data(0xAB);
         cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0x8000), 0xAB);
+        assert_hex_eq!(cpu.mem_dbg_read(0x8000), 0xAB);
     }
 
     #[test]
@@ -126,7 +131,7 @@ mod tests {
         cpu.set_addr(0xA000);
         cpu.set_data(0xAB);
         cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0xA000), 0xAB);
+        assert_hex_eq!(cpu.mem_dbg_read(0xA000), 0xAB);
     }
 
     #[test]
@@ -135,7 +140,7 @@ mod tests {
         cpu.set_addr(0xC000);
         cpu.set_data(0xAB);
         cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0xAB);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xAB);
     }
 
     #[test]
@@ -144,7 +149,7 @@ mod tests {
         cpu.set_addr(0xD000);
         cpu.set_data(0xAB);
         cpu.mem_write();
-        assert_eq!(cpu.mem_dbg_read(0xD000), 0xAB);
+        assert_hex_eq!(cpu.mem_dbg_read(0xD000), 0xAB);
     }
 
     #[test]
@@ -210,7 +215,7 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0152);
+        assert_hex_eq!(cpu.pc(), 0x0152);
     }
     // }}}
 
@@ -225,11 +230,11 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x015D);
-        assert_eq!(cpu.bc(), 0x0102);
-        assert_eq!(cpu.de(), 0x0304);
-        assert_eq!(cpu.hl(), 0x0506);
-        assert_eq!(cpu.sp(), 0x0708);
+        assert_hex_eq!(cpu.pc(), 0x015D);
+        assert_hex_eq!(cpu.bc(), 0x0102);
+        assert_hex_eq!(cpu.de(), 0x0304);
+        assert_hex_eq!(cpu.hl(), 0x0506);
+        assert_hex_eq!(cpu.sp(), 0x0708);
     }
     // }}}
 
@@ -249,13 +254,13 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0x2);
-        assert_eq!(cpu.mem_dbg_read(0xD000), 0x2);
-        assert_eq!(cpu.hl(), 0xD0EF);
-        assert_eq!(cpu.mem_dbg_read(0xD0EF), 0x0);
-        assert_eq!(cpu.mem_dbg_read(0xD0F0), 0x2);
-        assert_eq!(cpu.mem_dbg_read(0xD0F1), 0x2);
-        assert_eq!(cpu.mem_dbg_read(0xD0F2), 0x0);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x2);
+        assert_hex_eq!(cpu.mem_dbg_read(0xD000), 0x2);
+        assert_hex_eq!(cpu.hl(), 0xD0EF);
+        assert_hex_eq!(cpu.mem_dbg_read(0xD0EF), 0x0);
+        assert_hex_eq!(cpu.mem_dbg_read(0xD0F0), 0x2);
+        assert_hex_eq!(cpu.mem_dbg_read(0xD0F1), 0x2);
+        assert_hex_eq!(cpu.mem_dbg_read(0xD0F2), 0x0);
     }
     // }}}
 
@@ -281,7 +286,7 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.a(), 0x01);
     }
     // }}}
 
@@ -293,9 +298,9 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0154);
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0xFE);
-        assert_eq!(cpu.mem_dbg_read(0xC001), 0xFF);
+        assert_hex_eq!(cpu.pc(), 0x0154);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xFE);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC001), 0xFF);
     }
     // }}}
 
@@ -310,16 +315,16 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0155);
-        assert_eq!(cpu.sp(), 0xFFFF);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.bc(), 0x0014);
-        assert_eq!(cpu.de(), 0x00D9);
-        assert_eq!(cpu.hl(), 0x014E);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.carry(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.pc(), 0x0155);
+        assert_hex_eq!(cpu.sp(), 0xFFFF);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.bc(), 0x0014);
+        assert_hex_eq!(cpu.de(), 0x00D9);
+        assert_hex_eq!(cpu.hl(), 0x014E);
+        assert_hex_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -334,16 +339,16 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0155);
-        assert_eq!(cpu.sp(), 0xFFFD);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.bc(), 0x0012);
-        assert_eq!(cpu.de(), 0x00D7);
-        assert_eq!(cpu.hl(), 0x014C);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.carry(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.pc(), 0x0155);
+        assert_hex_eq!(cpu.sp(), 0xFFFD);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.bc(), 0x0012);
+        assert_hex_eq!(cpu.de(), 0x00D7);
+        assert_hex_eq!(cpu.hl(), 0x014C);
+        assert_hex_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -358,16 +363,16 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0155);
-        assert_eq!(cpu.sp(), 0xFFFE);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.bc(), 0x0013);
-        assert_eq!(cpu.de(), 0x00D8);
-        assert_eq!(cpu.hl(), 0x046E);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.carry(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.pc(), 0x0155);
+        assert_hex_eq!(cpu.sp(), 0xFFFE);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.bc(), 0x0013);
+        assert_hex_eq!(cpu.de(), 0x00D8);
+        assert_hex_eq!(cpu.hl(), 0x046E);
+        assert_hex_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -391,16 +396,16 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.sp(), 0xFFFE);
-        assert_eq!(cpu.a(), 0x02);
-        assert_eq!(cpu.bc(), 0x0114);
-        assert_eq!(cpu.de(), 0x01D9);
-        assert_eq!(cpu.hl(), 0x0250);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.carry(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0x01);
+        assert_hex_eq!(cpu.sp(), 0xFFFE);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.bc(), 0x0114);
+        assert_hex_eq!(cpu.de(), 0x01D9);
+        assert_hex_eq!(cpu.hl(), 0x0250);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x01);
     }
     // }}}
 
@@ -421,16 +426,16 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.sp(), 0xFFFE);
-        assert_eq!(cpu.a(), 0x00);
-        assert_eq!(cpu.bc(), 0xFF12);
-        assert_eq!(cpu.de(), 0xFFD7);
-        assert_eq!(cpu.hl(), 0xBFFF);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.carry(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0xFF);
+        assert_hex_eq!(cpu.sp(), 0xFFFE);
+        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.bc(), 0xFF12);
+        assert_hex_eq!(cpu.de(), 0xFFD7);
+        assert_hex_eq!(cpu.hl(), 0xBFFF);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xFF);
     }
     // }}}
 
@@ -450,12 +455,12 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0164);
-        assert_eq!(cpu.bc(), 0x0102);
-        assert_eq!(cpu.de(), 0x0304);
-        assert_eq!(cpu.hl(), 0x0506);
-        assert_eq!(cpu.a(), 0x00);
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0xA5);
+        assert_hex_eq!(cpu.pc(), 0x0164);
+        assert_hex_eq!(cpu.bc(), 0x0102);
+        assert_hex_eq!(cpu.de(), 0x0304);
+        assert_hex_eq!(cpu.hl(), 0x0506);
+        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xA5);
     }
     // }}}
 
@@ -468,8 +473,8 @@ mod tests {
     "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x4B);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x4B);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -483,8 +488,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x88);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x88);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -498,8 +503,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x12);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x12);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -513,8 +518,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x48);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x48);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -526,7 +531,7 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x00);
     }
     // }}}
 
@@ -539,9 +544,9 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x5A);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.a(), 0x5A);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.bcdn(), 1);
     }
     // }}}
 
@@ -554,8 +559,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x02);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -569,10 +574,10 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x0F);
-        assert_eq!(cpu.carry(), 0);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 0);
+        assert_hex_eq!(cpu.a(), 0x0F);
+        assert_hex_eq!(cpu.carry(), 0);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 0);
     }
     // }}}
 
@@ -592,11 +597,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0156);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.bc(), 0x0014);
-        assert_eq!(cpu.de(), 0x00D9);
-        assert_eq!(cpu.hl(), 0x014E);
+        assert_hex_eq!(cpu.pc(), 0x0156);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.bc(), 0x0014);
+        assert_hex_eq!(cpu.de(), 0x00D9);
+        assert_hex_eq!(cpu.hl(), 0x014E);
     }
     // }}}
 
@@ -629,12 +634,12 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0156);
-        assert_eq!(cpu.a(), 0xFF);
-        assert_eq!(cpu.bc(), 0x0013);
+        assert_hex_eq!(cpu.pc(), 0x0156);
+        assert_hex_eq!(cpu.a(), 0xFF);
+        assert_hex_eq!(cpu.bc(), 0x0013);
         // This is actually a problem, something is clearing carry
-        assert_eq!(cpu.de(), 0x01D9);
-        assert_eq!(cpu.hl(), 0x024D);
+        assert_hex_eq!(cpu.de(), 0x01D9);
+        assert_hex_eq!(cpu.hl(), 0x024D);
     }
     // }}}
 
@@ -646,7 +651,7 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x00);
     }
     // }}}
 
@@ -665,13 +670,13 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.b(), 0x01);
-        assert_eq!(cpu.c(), 0x01);
-        assert_eq!(cpu.d(), 0x01);
-        assert_eq!(cpu.e(), 0x01);
-        assert_eq!(cpu.h(), 0x01);
-        assert_eq!(cpu.l(), 0x01);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.b(), 0x01);
+        assert_hex_eq!(cpu.c(), 0x01);
+        assert_hex_eq!(cpu.d(), 0x01);
+        assert_hex_eq!(cpu.e(), 0x01);
+        assert_hex_eq!(cpu.h(), 0x01);
+        assert_hex_eq!(cpu.l(), 0x01);
     }
     // }}}
 
@@ -685,9 +690,9 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.mem_dbg_read(0xC000), 0x01);
-        assert_eq!(cpu.b(), 0x01);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x01);
+        assert_hex_eq!(cpu.b(), 0x01);
     }
     // }}}
 
@@ -699,7 +704,7 @@ mod tests {
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.pc(), 0x0152);
+        assert_hex_eq!(cpu.pc(), 0x0152);
     }
     // }}}
 
@@ -715,8 +720,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x28);
-        assert_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.a(), 0x28);
+        assert_hex_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -733,8 +738,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0xDA);
-        assert_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.a(), 0xDA);
+        assert_hex_eq!(cpu.bcdn(), 0);
     }
     // }}}
 
@@ -751,8 +756,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x2B);
-        assert_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.a(), 0x2B);
+        assert_hex_eq!(cpu.bcdn(), 1);
     }
     // }}}
 
@@ -769,8 +774,8 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x28);
-        assert_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.a(), 0x28);
+        assert_hex_eq!(cpu.bcdn(), 1);
     }
     // }}}
 
@@ -787,11 +792,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x12);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 0);
+        assert_hex_eq!(cpu.a(), 0x12);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 0);
     }
     // }}}
 
@@ -808,11 +813,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x32);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 0);
-        assert_eq!(cpu.carry(), 0);
+        assert_hex_eq!(cpu.a(), 0x32);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 0);
+        assert_hex_eq!(cpu.carry(), 0);
     }
     // }}}
 
@@ -829,11 +834,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x7F);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 0);
-        assert_eq!(cpu.carry(), 0);
+        assert_hex_eq!(cpu.a(), 0x7F);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 0);
+        assert_hex_eq!(cpu.carry(), 0);
     }
     // }}}
 
@@ -856,11 +861,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x2A);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x2A);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -872,11 +877,11 @@ mod tests {
     "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x00);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -888,11 +893,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x01);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -904,11 +909,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x02);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x02);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -920,11 +925,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x03);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 1);
+        assert_hex_eq!(cpu.a(), 0x03);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 1);
     }
     // }}}
 
@@ -937,11 +942,11 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x05);
-        assert_eq!(cpu.zero(), 0);
-        assert_eq!(cpu.bcdn(), 0);
-        assert_eq!(cpu.bcdh(), 1);
-        assert_eq!(cpu.carry(), 0);
+        assert_hex_eq!(cpu.a(), 0x05);
+        assert_hex_eq!(cpu.zero(), 0);
+        assert_hex_eq!(cpu.bcdn(), 0);
+        assert_hex_eq!(cpu.bcdh(), 1);
+        assert_hex_eq!(cpu.carry(), 0);
     }
     // }}}
 
@@ -954,7 +959,7 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0xA3);
+        assert_hex_eq!(cpu.a(), 0xA3);
     }
     // }}}
 
@@ -967,7 +972,7 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0xB7);
+        assert_hex_eq!(cpu.a(), 0xB7);
     }
     // }}}
 
@@ -983,11 +988,74 @@ mod tests {
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_eq!(cpu.a(), 0x2A);
-        assert_eq!(cpu.zero(), 1);
-        assert_eq!(cpu.bcdn(), 1);
-        assert_eq!(cpu.bcdh(), 0);
-        assert_eq!(cpu.carry(), 0);
+        assert_hex_eq!(cpu.a(), 0x2A);
+        assert_hex_eq!(cpu.zero(), 1);
+        assert_hex_eq!(cpu.bcdn(), 1);
+        assert_hex_eq!(cpu.bcdh(), 0);
+        assert_hex_eq!(cpu.carry(), 0);
+    }
+    // }}}
+
+    // {{{ test ret_cond
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ret_cond() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ret
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ret() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test reti
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_reti() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test jp_cond_imm16
+    #[test]
+    fn execute_jp_cond_imm16() {
+        const ROM: &[u8] = gbasm! {r#"
+jp z, Test1
+  halt
+Test1:
+halt
+jp c, Test2
+halt
+Test2:
+jp nz, Test3
+jp nc, Test4
+halt
+Test3:
+inc a
+Test4:
+inc a
+halt
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.pc(), 0x155);
     }
     // }}}
 
@@ -1006,9 +1074,57 @@ SkipIncA:
             "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(30);
-        assert_eq!(cpu.bc(), 0x0114);
-        assert_eq!(cpu.pc(), 0x0156);
-        assert_eq!(cpu.a(), 0x01);
+        assert_hex_eq!(cpu.bc(), 0x0114);
+        assert_hex_eq!(cpu.pc(), 0x0156);
+        assert_hex_eq!(cpu.a(), 0x01);
+    }
+    // }}}
+
+    // {{{ test jp_hl
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_jp_hl() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test call_cond_imm16
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_call_cond_imm16() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test call_imm16
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_call_imm16() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test rst_tgt3
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_rst_tgt3() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
     }
     // }}}
 }
