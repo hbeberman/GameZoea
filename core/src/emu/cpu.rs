@@ -288,6 +288,18 @@ impl Cpu {
             0xC7 | 0xE7 | 0xD7 | 0xF7 | 0xCF | 0xEF | 0xDF | 0xFF => Cpu::rst_tgt3,
             0xC1 | 0xE1 | 0xD1 | 0xF1 => Cpu::pop_r16stk,
             0xC5 | 0xE5 | 0xD5 | 0xF5 => Cpu::push_r16stk,
+            0xCB => Cpu::cb_prefix,
+            0xE2 => Cpu::ldh_mc_a,
+            0xE0 => Cpu::ldh_mimm8_a,
+            0xEA => Cpu::ld_mimm16_a,
+            0xF2 => Cpu::ldh_a_mc,
+            0xF0 => Cpu::ldh_a_mimm8,
+            0xFA => Cpu::ld_a_mimm16,
+            0xE8 => Cpu::add_sp_imm8,
+            0xF8 => Cpu::ld_hl_sp_plus_imm8,
+            0xF9 => Cpu::ld_sp_hl,
+            0xF3 => Cpu::di,
+            0xFB => Cpu::ei,
             _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
         }
     }
@@ -1830,6 +1842,162 @@ impl Cpu {
                 self.fetch_next();
             }
             M0 => self.set_mc(M5),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode cg_prefix
+    pub fn cb_prefix(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ldh_mc_a
+    pub fn ldh_mc_a(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ldh_mimm8_a
+    pub fn ldh_mimm8_a(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ld_mimm16_a
+    pub fn ld_mimm16_a(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ldh_a_mc
+    pub fn ldh_a_mc(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ldh_a_mimm8
+    pub fn ldh_a_mimm8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ld_a_mimm16
+    pub fn ld_a_mimm16(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode add_sp_imm8
+    pub fn add_sp_imm8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ld_hl_sp_plus_imm8
+    pub fn ld_hl_sp_plus_imm8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ld_sp_hl
+    pub fn ld_sp_hl(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode di
+    pub fn di(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode ei
+    pub fn ei(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }

@@ -1224,5 +1224,137 @@ SkipIncA:
     }
     // }}}
 
+    // {{{ test ldh_mc_a
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ldh_mc_a() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ldh_mimm8_a
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ldh_mimm8_a() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ld_mimm16_a
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ld_mimm16_a() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ldh_a_mc
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ldh_a_mc() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ldh_a_mimm8
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ldh_a_mimm8() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ld_a_mimm16
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ld_a_mimm16() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test add_sp_imm8
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_add_sp_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ld_hl_sp_plus_imm8
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ld_hl_sp_plus_imm8() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ld_sp_hl
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ld_sp_hl() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test di
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_di() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test ei
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_ei() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
     // }}}
 }
