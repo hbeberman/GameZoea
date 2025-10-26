@@ -1175,5 +1175,41 @@ SkipIncA:
         cpu.mtick(1);
         assert_hex_eq!(cpu.pc(), 0x18);
     }
+
+    // {{{ test pop_r16stk
+    #[test]
+    #[ignore = "TODO"]
+    fn execute_pop_r16stk() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test push_r16stk
+    #[test]
+    fn execute_push_r16stk() {
+        const ROM: &[u8] = gbasm! {r#"
+  push bc
+  push de
+  push hl
+  push af
+        "#};
+        let mut cpu = Cpu::init_dmg(ROM);
+        cpu.mtick(200);
+        assert_hex_eq!(cpu.af(), 0x01B0);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFD), 0x00);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFC), 0x13);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFB), 0x00);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFFA), 0xD8);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFF9), 0x01);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFF8), 0x4D);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFF7), 0x01);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFF6), 0xB0);
+    }
+    // }}}
+
     // }}}
 }

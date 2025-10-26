@@ -57,6 +57,26 @@ impl R16 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum R16stk {
+    BC,
+    DE,
+    HL,
+    AF,
+}
+
+impl R16stk {
+    pub fn from(r16: u8) -> Self {
+        match r16 {
+            0 => R16stk::BC,
+            1 => R16stk::DE,
+            2 => R16stk::HL,
+            3 => R16stk::AF,
+            _ => panic!("Invalid r16stk operand: {:02x}", r16),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum R16mem {
     BC,
     DE,
@@ -273,10 +293,14 @@ impl Cpu {
     }
 
     pub fn execute(&mut self) {
-        eprintln!("Execute Invoked!\n{}", self);
+        if self.pc() >= 0x150 {
+            eprintln!("Execute Invoked!\n{}", self);
+        }
         (self.executing)(self);
         self.mc = self.mc.next();
-        eprintln!("Execute Resolved!\n{}", self);
+        if self.pc() >= 0x150 {
+            eprintln!("Execute Resolved!\n{}", self);
+        }
     }
 
     pub fn fetch_next(&mut self) {
@@ -1656,7 +1680,6 @@ impl Cpu {
             M3 => {
                 if self.cond() {
                     self.set_addr(self.sp());
-                    eprintln!("!!!!!SELF.PCH IS THIS {}", self.pch());
                     self.data = self.pch();
                     self.mem_write();
                     self.dec_sp();
@@ -1764,7 +1787,7 @@ impl Cpu {
                 self.fetch_next();
                 todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1773,11 +1796,27 @@ impl Cpu {
     // {{{ opcode push_r16stk
     pub fn push_r16stk(&mut self) {
         match self.mc {
+            M4 => {
+                self.addr = self.sp();
+                self.dec_sp();
+            }
+            M3 => {
+                self.addr = self.sp();
+                let r16stk = R16stk::from((self.ir() & M54) >> 4);
+                self.data = (self.r16stk(r16stk) >> 8) as u8;
+                self.mem_write();
+                self.dec_sp();
+            }
+            M2 => {
+                self.addr = self.sp();
+                let r16stk = R16stk::from((self.ir() & M54) >> 4);
+                self.data = self.r16stk(r16stk) as u8;
+                self.mem_write();
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -1871,6 +1910,15 @@ impl Cpu {
             R16::DE => self.de(),
             R16::HL => self.hl(),
             R16::SP => self.sp(),
+        }
+    }
+
+    pub fn r16stk(&self, r16stk: R16stk) -> u16 {
+        match r16stk {
+            R16stk::BC => self.bc(),
+            R16stk::DE => self.de(),
+            R16stk::HL => self.hl(),
+            R16stk::AF => self.af(),
         }
     }
 
@@ -2058,6 +2106,15 @@ impl Cpu {
             R16::DE => self.set_de(data),
             R16::HL => self.set_hl(data),
             R16::SP => self.set_sp(data),
+        }
+    }
+
+    pub fn set_r16stk(&mut self, r16stk: R16stk, data: u16) {
+        match r16stk {
+            R16stk::BC => self.set_bc(data),
+            R16stk::DE => self.set_de(data),
+            R16stk::HL => self.set_hl(data),
+            R16stk::AF => self.set_af(data),
         }
     }
 
