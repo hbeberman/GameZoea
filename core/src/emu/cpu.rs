@@ -1783,11 +1783,24 @@ impl Cpu {
     // {{{ opcode pop_r16stk
     pub fn pop_r16stk(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_sp();
             }
-            M0 => self.set_mc(M5),
+            M2 => {
+                self.addr = self.sp();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_sp();
+            }
+            M1 => {
+                let r16stk = R16stk::from((self.ir() & M54) >> 4);
+                self.set_r16stk(r16stk, self.wz());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M4),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }

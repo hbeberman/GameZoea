@@ -1181,10 +1181,23 @@ SkipIncA:
     #[ignore = "TODO"]
     fn execute_pop_r16stk() {
         const ROM: &[u8] = gbasm! {r#"
+  ld bc, 0x1A2B
+  push bc
+  push bc
+  push bc
+  push bc
+  ld bc, 0x0000
+  pop bc
+  pop de
+  pop hl
+  pop af
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.bc(), 0x1A2B);
+        assert_hex_eq!(cpu.de(), 0x1A2B);
+        assert_hex_eq!(cpu.hl(), 0x1A2B);
+        assert_hex_eq!(cpu.af(), 0x1A2B);
     }
     // }}}
 
