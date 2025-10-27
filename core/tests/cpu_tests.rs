@@ -1297,9 +1297,12 @@ SkipIncA:
 
     // {{{ test ld_a_mimm16
     #[test]
-    #[ignore = "TODO"]
     fn execute_ld_a_mimm16() {
         const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  ld [0xC000], a
+  ld a, 0x00
+  ld a, [0xC000]
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
