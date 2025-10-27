@@ -2295,12 +2295,53 @@ impl Cpu {
 
     // {{{ opcode rr_r8
     pub fn rr_r8(&mut self) {
+        let r8 = self.r8_operand();
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                let c = self.carry();
+                self.set_carry(self.z() & 0x1);
+                self.addr = self.hl();
+                self.data = (self.z() >> 1) | (c << 7);
+                self.mem_write();
+
+                if self.data == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(0);
+            }
+            M1 => {
+                if r8 == R8::HL {
+                    self.fetch_next();
+                } else {
+                    let c = self.carry();
+                    self.set_carry(self.r8(r8) & 0x01);
+                    self.set_r8(r8, (self.r8(r8) >> 1) | (c << 7));
+
+                    if self.r8(r8) == 0 {
+                        self.set_zero(1);
+                    } else {
+                        self.set_zero(0);
+                    }
+                    self.set_bcdn(0);
+                    self.set_bcdh(0);
+                    self.fetch_next();
+                }
+            }
+            M0 => {
+                if r8 == R8::HL {
+                    self.set_mc(M4)
+                } else {
+                    self.set_mc(M2)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
