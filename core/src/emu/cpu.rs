@@ -355,6 +355,10 @@ impl Cpu {
         self.inc_pc();
     }
 
+    pub fn mask_bit(&self) -> u8 {
+        1 << ((self.ir() & M543) >> 3)
+    }
+
     pub fn init_dmg(cartridge: &[u8]) -> Self {
         let mut mem = [0u8; 0xFFFF];
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
@@ -2559,12 +2563,43 @@ impl Cpu {
 
     // {{{ opcode bit_b3_r8
     pub fn bit_b3_r8(&mut self) {
+        let r8 = self.r8_operand();
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M2 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data);
             }
-            M0 => self.set_mc(M2),
+            M1 => {
+                if r8 == R8::HL {
+                    let bit = self.mask_bit();
+                    if self.z() & bit == bit {
+                        self.set_zero(0);
+                    } else {
+                        self.set_zero(1);
+                    }
+                    self.set_bcdn(0);
+                    self.set_bcdh(1);
+                    self.fetch_next();
+                } else {
+                    let bit = self.mask_bit();
+                    if self.r8(r8) & bit == bit {
+                        self.set_zero(0);
+                    } else {
+                        self.set_zero(1);
+                    }
+                    self.set_bcdn(0);
+                    self.set_bcdh(1);
+                    self.fetch_next();
+                }
+            }
+            M0 => {
+                if r8 == R8::HL {
+                    self.set_mc(M3)
+                } else {
+                    self.set_mc(M2)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }

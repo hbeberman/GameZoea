@@ -1502,7 +1502,6 @@ SkipIncA:
 
     // {{{ test srl_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_srl_r8() {
         const ROM: &[u8] = gbasm! {r#"
   ld hl, 0xC000
@@ -1520,13 +1519,30 @@ SkipIncA:
 
     // {{{ test bit_b3_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_bit_b3_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0x80
+  ld [hl], b
+  bit 7, b
+  jp nz, test1 
+  halt
+  test1:
+  bit 7, [hl]
+  jp nz, test2
+  halt
+  test2:
+  bit 7, b
+  jp z, test3 
+  bit 7, [hl]
+  jp z, test3 
+  inc a
+  halt
+  test3:
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x02);
     }
     // }}}
 
