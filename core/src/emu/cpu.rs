@@ -1950,11 +1950,22 @@ impl Cpu {
     // {{{ opcode ldh_a_mimm8
     pub fn ldh_a_mimm8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                self.addr = 0xFF00 + self.z() as u16;
+                self.mem_read();
+                self.set_z(self.data);
+            }
+            M1 => {
+                self.set_a(self.z());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M4),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
