@@ -1327,13 +1327,17 @@ SkipIncA:
 
     // {{{ test ld_hl_sp_plus_imm8
     #[test]
-    #[ignore = "TODO"]
     fn execute_ld_hl_sp_plus_imm8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, sp-0x1
+  ld b, h
+  ld c, l
+  ld hl, sp+0x1
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.bc(), 0xFFFD);
+        assert_hex_eq!(cpu.hl(), 0xFFFF);
     }
     // }}}
 

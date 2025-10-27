@@ -2043,11 +2043,32 @@ impl Cpu {
     // {{{ opcode ld_hl_sp_plus_imm8
     pub fn ld_hl_sp_plus_imm8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                self.addr = 0x0000;
+                let (r, c, h, _) = if self.z() & 0x80 != 0 {
+                    self.spl().halfcarry_sub(!(self.z()) + 0x1)
+                } else {
+                    self.spl().halfcarry_add(self.z())
+                };
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.set_l(r);
+                self.data = self.z();
+            }
+            M1 => {
+                let (r, _, _, _) = self.sph().halfcarry_add(self.carry());
+                self.set_h(r);
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M4),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
