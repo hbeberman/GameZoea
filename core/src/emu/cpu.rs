@@ -2607,12 +2607,33 @@ impl Cpu {
 
     // {{{ opcode res_b3_r8
     pub fn res_b3_r8(&mut self) {
+        let r8 = self.r8_operand();
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data);
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                self.addr = self.hl();
+                self.data = self.z() & !self.mask_bit();
+                self.mem_write();
+            }
+            M1 => {
+                if r8 == R8::HL {
+                    self.fetch_next();
+                } else {
+                    self.set_r8(r8, self.r8(r8) & !self.mask_bit());
+                    self.fetch_next();
+                }
+            }
+            M0 => {
+                if r8 == R8::HL {
+                    self.set_mc(M4)
+                } else {
+                    self.set_mc(M2)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
