@@ -1461,18 +1461,25 @@ SkipIncA:
         cpu.mtick(200);
         assert_hex_eq!(cpu.b(), 0x4A);
         assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x4A);
+        assert_eq!(cpu.carry(), 1);
     }
     // }}}
 
     // {{{ test sra_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_sra_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0xA5
+  ld [hl], b
+  sra [hl]
+  sra b
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.b(), 0xD2);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xD2);
+        assert_eq!(cpu.carry(), 1);
     }
     // }}}
 
