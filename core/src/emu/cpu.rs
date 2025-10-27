@@ -224,6 +224,7 @@ impl Cpu {
                 0x28..=0x2F => Cpu::sra_r8,
                 0x30..=0x37 => Cpu::swap_r8,
                 0x38..=0x3F => Cpu::srl_r8,
+                //
                 0x40..=0x7F => Cpu::bit_b3_r8,
                 0x80..=0xBF => Cpu::res_b3_r8,
                 0xC0..=0xFF => Cpu::set_b3_r8,
@@ -303,20 +304,31 @@ impl Cpu {
                 0xC4 | 0xD4 | 0xCC | 0xDC => Cpu::call_cond_imm16,
                 0xCD => Cpu::call_imm16,
                 0xC7 | 0xE7 | 0xD7 | 0xF7 | 0xCF | 0xEF | 0xDF | 0xFF => Cpu::rst_tgt3,
+                //
                 0xC1 | 0xE1 | 0xD1 | 0xF1 => Cpu::pop_r16stk,
                 0xC5 | 0xE5 | 0xD5 | 0xF5 => Cpu::push_r16stk,
+                //
                 0xCB => Cpu::cb_prefix,
+                //
                 0xE2 => Cpu::ldh_mc_a,
                 0xE0 => Cpu::ldh_mimm8_a,
                 0xEA => Cpu::ld_mimm16_a,
                 0xF2 => Cpu::ldh_a_mc,
                 0xF0 => Cpu::ldh_a_mimm8,
                 0xFA => Cpu::ld_a_mimm16,
+                //
                 0xE8 => Cpu::add_sp_imm8,
                 0xF8 => Cpu::ld_hl_sp_plus_imm8,
                 0xF9 => Cpu::ld_sp_hl,
+                //
                 0xF3 => Cpu::di,
                 0xFB => Cpu::ei,
+                //
+                0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xF4 | 0xFC | 0xFD => panic!(
+                    "Opcode hard-locked the CPU!: 0x{:02x} (pc: {:04x})",
+                    self.ir(),
+                    self.pc()
+                ),
                 _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
             }
         }
@@ -819,8 +831,33 @@ impl Cpu {
     pub fn daa(&mut self) {
         match self.mc {
             M1 => {
+                let mut offset = 0;
+                let mut carry = 0;
+
+                if self.bcdn() == 0 {
+                    if (self.bcdh() == 1) || ((self.a() & 0x0F) > 9) {
+                        offset |= 0x06;
+                    }
+                    if (self.carry() == 1) || (self.a() > 0x99) {
+                        offset |= 0x60;
+                        carry = 1;
+                    }
+                    self.set_a(self.a().wrapping_add(offset));
+                } else {
+                    if self.bcdh() == 1 {
+                        offset |= 0x06;
+                    }
+                    if self.carry() == 1 {
+                        offset |= 0x60;
+                        carry = 1;
+                    }
+                    self.set_a(self.a().wrapping_sub(offset));
+                }
+
+                self.set_zero((self.a() == 0) as u8);
+                self.set_bcdh(0);
+                self.set_carry(carry);
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),

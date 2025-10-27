@@ -525,13 +525,17 @@ mod tests {
 
     // {{{ test daa
     #[test]
-    #[ignore = "TODO"]
     fn execute_daa() {
         const ROM: &[u8] = gbasm! {r#"
+  ld a, 0x25
+  add a, 0x15
+  daa
+  add a, 0x35
+  daa
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0x75);
     }
     // }}}
 
@@ -1178,7 +1182,6 @@ SkipIncA:
 
     // {{{ test pop_r16stk
     #[test]
-    #[ignore = "TODO"]
     fn execute_pop_r16stk() {
         const ROM: &[u8] = gbasm! {r#"
   ld bc, 0x1A2B
