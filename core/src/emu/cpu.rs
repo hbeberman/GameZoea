@@ -2077,11 +2077,14 @@ impl Cpu {
     // {{{ opcode ld_sp_hl
     pub fn ld_sp_hl(&mut self) {
         match self.mc {
+            M2 => {
+                self.addr = self.hl();
+                self.set_sp(self.hl());
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M3),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }

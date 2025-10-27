@@ -1343,13 +1343,13 @@ SkipIncA:
 
     // {{{ test ld_sp_hl
     #[test]
-    #[ignore = "TODO"]
     fn execute_ld_sp_hl() {
         const ROM: &[u8] = gbasm! {r#"
+  ld sp, hl
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.sp(), 0x014D);
     }
     // }}}
 
