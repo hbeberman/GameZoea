@@ -969,7 +969,7 @@ impl Cpu {
     pub fn ld_r8_r8(&mut self) {
         match self.mc {
             M1 => {
-                let r8_source = R8::from(self.ir() & M210);
+                let r8_source = self.r8_operand();
                 let r8_dest = R8::from((self.ir() & M543) >> 3);
                 self.set_r8(r8_dest, self.r8(r8_source));
                 self.fetch_next();
@@ -1003,7 +1003,7 @@ impl Cpu {
     pub fn ld_mhl_r8(&mut self) {
         match self.mc {
             M2 => {
-                let r8_source = R8::from(self.ir() & M210);
+                let r8_source = self.r8_operand();
                 self.addr = self.hl();
                 self.data = self.r8(r8_source);
                 self.mem_write();
@@ -1043,7 +1043,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let (r, c, h, z) = self.a().halfcarry_add(match r8_operand {
                     R8::HL => self.z(),
                     _ => self.r8(r8_operand),
@@ -1057,7 +1057,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1075,7 +1075,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let (r1, c1, h1, _) = self.a().halfcarry_add(match r8_operand {
                     R8::HL => self.z(),
                     _ => self.r8(r8_operand),
@@ -1090,7 +1090,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1108,7 +1108,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let (r, c, h, z) = self.a().halfcarry_sub(match r8_operand {
                     R8::HL => self.z(),
                     _ => self.r8(r8_operand),
@@ -1122,7 +1122,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1140,7 +1140,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let (r1, c1, h1, _) = self.a().halfcarry_sub(match r8_operand {
                     R8::HL => self.z(),
                     _ => self.r8(r8_operand),
@@ -1155,7 +1155,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1173,7 +1173,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let r = self.a()
                     & match r8_operand {
                         R8::HL => self.z(),
@@ -1192,7 +1192,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1210,7 +1210,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let r = self.a()
                     ^ match r8_operand {
                         R8::HL => self.z(),
@@ -1229,7 +1229,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1247,7 +1247,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let r = self.a()
                     | match r8_operand {
                         R8::HL => self.z(),
@@ -1266,7 +1266,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1284,7 +1284,7 @@ impl Cpu {
                 self.set_z(self.data());
             }
             M1 => {
-                let r8_operand = R8::from(self.ir() & M210);
+                let r8_operand = self.r8_operand();
                 let (_, c, h, z) = self.a().halfcarry_sub(match r8_operand {
                     R8::HL => self.z(),
                     _ => self.r8(r8_operand),
@@ -1297,7 +1297,7 @@ impl Cpu {
 
                 self.fetch_next();
             }
-            M0 => match R8::from(self.ir() & M210) {
+            M0 => match self.r8_operand() {
                 R8::HL => self.set_mc(M3),
                 _ => self.set_mc(M2),
             },
@@ -1870,8 +1870,8 @@ impl Cpu {
     pub fn cb_prefix(&mut self) {
         match self.mc {
             M1 => {
-                self.fetch_next();
                 self.cb = 1;
+                self.fetch_next();
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -2137,12 +2137,51 @@ impl Cpu {
 
     // {{{ opcode rlc_r8
     pub fn rlc_r8(&mut self) {
+        let r8 = self.r8_operand();
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                self.set_carry((self.z() & 0x80) >> 7);
+                self.addr = self.hl();
+                self.data = self.z().rotate_left(1);
+                self.mem_write();
+
+                if self.data == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(0);
+            }
+            M1 => {
+                if r8 == R8::HL {
+                    self.fetch_next();
+                } else {
+                    self.set_carry((self.r8(r8) & 0x80) >> 7);
+                    self.set_r8(r8, self.r8(r8).rotate_left(1));
+
+                    if self.r8(r8) == 0 {
+                        self.set_zero(1);
+                    } else {
+                        self.set_zero(0);
+                    }
+                    self.set_bcdn(0);
+                    self.set_bcdh(0);
+                    self.fetch_next();
+                }
+            }
+            M0 => {
+                if r8 == R8::HL {
+                    self.set_mc(M4)
+                } else {
+                    self.set_mc(M2)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -2358,6 +2397,10 @@ impl Cpu {
             ),
             R8::A => self.a(),
         }
+    }
+
+    pub fn r8_operand(&self) -> R8 {
+        R8::from(self.ir() & M210)
     }
 
     pub fn r16(&self, r16: R16) -> u16 {
@@ -2796,7 +2839,7 @@ impl std::fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} ime: {} halted: {}",
+            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} ime: {} halted: {} cb: {}",
             self.m(),
             self.t(),
             self.af(),
@@ -2822,6 +2865,7 @@ impl std::fmt::Display for Cpu {
             self.mc(),
             self.ime(),
             self.halted,
+            self.cb,
         )
     }
 }
