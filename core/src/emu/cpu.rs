@@ -203,6 +203,7 @@ pub struct Cpu {
     addr: u16,
     data: u8,
     ime: u8,
+    cb: u8,
     mc: Mc,
     executing: fn(&mut Cpu),
     halted: bool,
@@ -210,97 +211,114 @@ pub struct Cpu {
 
 impl Cpu {
     // {{{ Execute Functions
-    pub fn decode(&self) -> fn(&mut Cpu) {
+    pub fn decode(&mut self) -> fn(&mut Cpu) {
         #[allow(clippy::manual_range_patterns)]
-        match self.ir() {
-            // Block 0
-            0x00 => Cpu::nop,
-            0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
-            0x02 | 0x22 | 0x12 | 0x32 => Cpu::ld_mr16mem_a,
-            0x0A | 0x2A | 0x1A | 0x3A => Cpu::ld_a_mr16mem,
-            0x08 => Cpu::ld_mimm16_sp,
-            //
-            0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
-            0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
-            0x09 | 0x29 | 0x19 | 0x39 => Cpu::add_hl_r16,
-            //
-            0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
-            0x34 => Cpu::inc_mhl,
-            0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
-            0x35 => Cpu::dec_mhl,
-            //
-            0x06 | 0x26 | 0x16 | 0x0E | 0x2E | 0x1E | 0x3E => Cpu::ld_r8_imm8,
-            0x36 => Cpu::ld_mhl_imm8,
-            //
-            0x07 => Cpu::rlca,
-            0x0F => Cpu::rrca,
-            0x17 => Cpu::rla,
-            0x1F => Cpu::rra,
-            0x27 => Cpu::daa,
-            0x2F => Cpu::cpl,
-            0x37 => Cpu::scf,
-            0x3F => Cpu::ccf,
-            //
-            0x18 => Cpu::jr_imm8,
-            0x20 | 0x30 | 0x28 | 0x38 => Cpu::jr_cond_imm8,
-            //
-            0x10 => Cpu::stop,
+        if self.cb != 0 {
+            self.cb = 0;
+            match self.ir() {
+                0x00..=0x07 => Cpu::rlc_r8,
+                0x08..=0x0F => Cpu::rrc_r8,
+                0x10..=0x17 => Cpu::rl_r8,
+                0x18..=0x1F => Cpu::rr_r8,
+                0x20..=0x27 => Cpu::sla_r8,
+                0x28..=0x2F => Cpu::sra_r8,
+                0x30..=0x37 => Cpu::swap_r8,
+                0x38..=0x3F => Cpu::srl_r8,
+                0x40..=0x7F => Cpu::bit_b3_r8,
+                0x80..=0xBF => Cpu::res_b3_r8,
+                0xC0..=0xFF => Cpu::set_b3_r8,
+            }
+        } else {
+            match self.ir() {
+                // Block 0
+                0x00 => Cpu::nop,
+                0x01 | 0x21 | 0x11 | 0x31 => Cpu::ld_r16_imm16,
+                0x02 | 0x22 | 0x12 | 0x32 => Cpu::ld_mr16mem_a,
+                0x0A | 0x2A | 0x1A | 0x3A => Cpu::ld_a_mr16mem,
+                0x08 => Cpu::ld_mimm16_sp,
+                //
+                0x03 | 0x23 | 0x13 | 0x33 => Cpu::inc_r16,
+                0x0B | 0x2B | 0x1B | 0x3B => Cpu::dec_r16,
+                0x09 | 0x29 | 0x19 | 0x39 => Cpu::add_hl_r16,
+                //
+                0x04 | 0x24 | 0x14 | 0x0C | 0x2C | 0x1C | 0x3C => Cpu::inc_r8,
+                0x34 => Cpu::inc_mhl,
+                0x05 | 0x25 | 0x15 | 0x0D | 0x2D | 0x1D | 0x3D => Cpu::dec_r8,
+                0x35 => Cpu::dec_mhl,
+                //
+                0x06 | 0x26 | 0x16 | 0x0E | 0x2E | 0x1E | 0x3E => Cpu::ld_r8_imm8,
+                0x36 => Cpu::ld_mhl_imm8,
+                //
+                0x07 => Cpu::rlca,
+                0x0F => Cpu::rrca,
+                0x17 => Cpu::rla,
+                0x1F => Cpu::rra,
+                0x27 => Cpu::daa,
+                0x2F => Cpu::cpl,
+                0x37 => Cpu::scf,
+                0x3F => Cpu::ccf,
+                //
+                0x18 => Cpu::jr_imm8,
+                0x20 | 0x30 | 0x28 | 0x38 => Cpu::jr_cond_imm8,
+                //
+                0x10 => Cpu::stop,
 
-            // Block 1
-            0x40 | 0x60 | 0x50 | 0x48 | 0x68 | 0x58 | 0x78 | 0x44 | 0x64 | 0x54 | 0x4C | 0x6C
-            | 0x5C | 0x7C | 0x42 | 0x62 | 0x52 | 0x4A | 0x6A | 0x5A | 0x7A | 0x41 | 0x61 | 0x51
-            | 0x49 | 0x69 | 0x59 | 0x79 | 0x45 | 0x65 | 0x55 | 0x4D | 0x6D | 0x5D | 0x7D | 0x43
-            | 0x63 | 0x53 | 0x4B | 0x6B | 0x5B | 0x7B | 0x47 | 0x67 | 0x57 | 0x4F | 0x6F | 0x5F
-            | 0x7F => Cpu::ld_r8_r8,
-            0x46 | 0x66 | 0x56 | 0x4E | 0x6E | 0x5E | 0x7E => Cpu::ld_r8_mhl,
-            0x70 | 0x74 | 0x72 | 0x71 | 0x75 | 0x73 | 0x77 => Cpu::ld_mhl_r8,
-            //
-            0x76 => Cpu::halt,
+                // Block 1
+                0x40 | 0x60 | 0x50 | 0x48 | 0x68 | 0x58 | 0x78 | 0x44 | 0x64 | 0x54 | 0x4C
+                | 0x6C | 0x5C | 0x7C | 0x42 | 0x62 | 0x52 | 0x4A | 0x6A | 0x5A | 0x7A | 0x41
+                | 0x61 | 0x51 | 0x49 | 0x69 | 0x59 | 0x79 | 0x45 | 0x65 | 0x55 | 0x4D | 0x6D
+                | 0x5D | 0x7D | 0x43 | 0x63 | 0x53 | 0x4B | 0x6B | 0x5B | 0x7B | 0x47 | 0x67
+                | 0x57 | 0x4F | 0x6F | 0x5F | 0x7F => Cpu::ld_r8_r8,
+                0x46 | 0x66 | 0x56 | 0x4E | 0x6E | 0x5E | 0x7E => Cpu::ld_r8_mhl,
+                0x70 | 0x74 | 0x72 | 0x71 | 0x75 | 0x73 | 0x77 => Cpu::ld_mhl_r8,
+                //
+                0x76 => Cpu::halt,
 
-            // Block 2
-            0x80 | 0x84 | 0x82 | 0x81 | 0x85 | 0x83 | 0x86 | 0x87 => Cpu::add_a_r8,
-            0x88 | 0x8C | 0x8A | 0x89 | 0x8D | 0x8B | 0x8E | 0x8F => Cpu::adc_a_r8,
-            0x90 | 0x94 | 0x92 | 0x96 | 0x91 | 0x95 | 0x93 | 0x97 => Cpu::sub_a_r8,
-            0x98 | 0x9C | 0x9A | 0x9E | 0x99 | 0x9D | 0x9B | 0x9F => Cpu::sbc_a_r8,
-            0xA0 | 0xA4 | 0xA2 | 0xA6 | 0xA1 | 0xA5 | 0xA3 | 0xA7 => Cpu::and_a_r8,
-            0xA8 | 0xAC | 0xAA | 0xAE | 0xA9 | 0xAD | 0xAB | 0xAF => Cpu::xor_a_r8,
-            0xB0 | 0xB4 | 0xB2 | 0xB6 | 0xB1 | 0xB5 | 0xB3 | 0xB7 => Cpu::or_a_r8,
-            0xB8 | 0xBC | 0xBA | 0xBE | 0xB9 | 0xBD | 0xBB | 0xBF => Cpu::cp_a_r8,
+                // Block 2
+                0x80 | 0x84 | 0x82 | 0x81 | 0x85 | 0x83 | 0x86 | 0x87 => Cpu::add_a_r8,
+                0x88 | 0x8C | 0x8A | 0x89 | 0x8D | 0x8B | 0x8E | 0x8F => Cpu::adc_a_r8,
+                0x90 | 0x94 | 0x92 | 0x96 | 0x91 | 0x95 | 0x93 | 0x97 => Cpu::sub_a_r8,
+                0x98 | 0x9C | 0x9A | 0x9E | 0x99 | 0x9D | 0x9B | 0x9F => Cpu::sbc_a_r8,
+                0xA0 | 0xA4 | 0xA2 | 0xA6 | 0xA1 | 0xA5 | 0xA3 | 0xA7 => Cpu::and_a_r8,
+                0xA8 | 0xAC | 0xAA | 0xAE | 0xA9 | 0xAD | 0xAB | 0xAF => Cpu::xor_a_r8,
+                0xB0 | 0xB4 | 0xB2 | 0xB6 | 0xB1 | 0xB5 | 0xB3 | 0xB7 => Cpu::or_a_r8,
+                0xB8 | 0xBC | 0xBA | 0xBE | 0xB9 | 0xBD | 0xBB | 0xBF => Cpu::cp_a_r8,
 
-            // Block 3
-            0xC6 => Cpu::add_a_imm8,
-            0xCE => Cpu::adc_a_imm8,
-            0xD6 => Cpu::sub_a_imm8,
-            0xDE => Cpu::sbc_a_imm8,
-            0xE6 => Cpu::and_a_imm8,
-            0xEE => Cpu::xor_a_imm8,
-            0xF6 => Cpu::or_a_imm8,
-            0xFE => Cpu::cp_a_imm8,
-            //
-            0xC0 | 0xD0 | 0xC8 | 0xD8 => Cpu::ret_cond,
-            0xC9 => Cpu::ret,
-            0xD9 => Cpu::reti,
-            0xC2 | 0xD2 | 0xCA | 0xDA => Cpu::jp_cond_imm16,
-            0xC3 => Cpu::jp_imm16,
-            0xE9 => Cpu::jp_hl,
-            0xC4 | 0xD4 | 0xCC | 0xDC => Cpu::call_cond_imm16,
-            0xCD => Cpu::call_imm16,
-            0xC7 | 0xE7 | 0xD7 | 0xF7 | 0xCF | 0xEF | 0xDF | 0xFF => Cpu::rst_tgt3,
-            0xC1 | 0xE1 | 0xD1 | 0xF1 => Cpu::pop_r16stk,
-            0xC5 | 0xE5 | 0xD5 | 0xF5 => Cpu::push_r16stk,
-            0xCB => Cpu::cb_prefix,
-            0xE2 => Cpu::ldh_mc_a,
-            0xE0 => Cpu::ldh_mimm8_a,
-            0xEA => Cpu::ld_mimm16_a,
-            0xF2 => Cpu::ldh_a_mc,
-            0xF0 => Cpu::ldh_a_mimm8,
-            0xFA => Cpu::ld_a_mimm16,
-            0xE8 => Cpu::add_sp_imm8,
-            0xF8 => Cpu::ld_hl_sp_plus_imm8,
-            0xF9 => Cpu::ld_sp_hl,
-            0xF3 => Cpu::di,
-            0xFB => Cpu::ei,
-            _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
+                // Block 3
+                0xC6 => Cpu::add_a_imm8,
+                0xCE => Cpu::adc_a_imm8,
+                0xD6 => Cpu::sub_a_imm8,
+                0xDE => Cpu::sbc_a_imm8,
+                0xE6 => Cpu::and_a_imm8,
+                0xEE => Cpu::xor_a_imm8,
+                0xF6 => Cpu::or_a_imm8,
+                0xFE => Cpu::cp_a_imm8,
+                //
+                0xC0 | 0xD0 | 0xC8 | 0xD8 => Cpu::ret_cond,
+                0xC9 => Cpu::ret,
+                0xD9 => Cpu::reti,
+                0xC2 | 0xD2 | 0xCA | 0xDA => Cpu::jp_cond_imm16,
+                0xC3 => Cpu::jp_imm16,
+                0xE9 => Cpu::jp_hl,
+                0xC4 | 0xD4 | 0xCC | 0xDC => Cpu::call_cond_imm16,
+                0xCD => Cpu::call_imm16,
+                0xC7 | 0xE7 | 0xD7 | 0xF7 | 0xCF | 0xEF | 0xDF | 0xFF => Cpu::rst_tgt3,
+                0xC1 | 0xE1 | 0xD1 | 0xF1 => Cpu::pop_r16stk,
+                0xC5 | 0xE5 | 0xD5 | 0xF5 => Cpu::push_r16stk,
+                0xCB => Cpu::cb_prefix,
+                0xE2 => Cpu::ldh_mc_a,
+                0xE0 => Cpu::ldh_mimm8_a,
+                0xEA => Cpu::ld_mimm16_a,
+                0xF2 => Cpu::ldh_a_mc,
+                0xF0 => Cpu::ldh_a_mimm8,
+                0xFA => Cpu::ld_a_mimm16,
+                0xE8 => Cpu::add_sp_imm8,
+                0xF8 => Cpu::ld_hl_sp_plus_imm8,
+                0xF9 => Cpu::ld_sp_hl,
+                0xF3 => Cpu::di,
+                0xFB => Cpu::ei,
+                _ => panic!("Opcode not implemented: 0x{:02x}", self.ir()),
+            }
         }
     }
 
@@ -360,6 +378,7 @@ impl Cpu {
             addr: 0x0000,
             data: 0x0000,
             ime: 0,
+            cb: 0,
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
@@ -1852,7 +1871,7 @@ impl Cpu {
         match self.mc {
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+                self.cb = 1;
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -2109,6 +2128,149 @@ impl Cpu {
             M1 => {
                 self.fetch_next();
                 self.set_ime(1);
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode rlc_r8
+    pub fn rlc_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode rrc_r8
+    pub fn rrc_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode rl_r8
+    pub fn rl_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode rr_r8
+    pub fn rr_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode sla_r8
+    pub fn sla_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode sra_r8
+    pub fn sra_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode swap_r8
+    pub fn swap_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode srl_r8
+    pub fn srl_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode bit_b3_r8
+    pub fn bit_b3_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode res_b3_r8
+    pub fn res_b3_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
+            }
+            M0 => self.set_mc(M2),
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+    // }}}
+
+    // {{{ opcode set_b3_r8
+    pub fn set_b3_r8(&mut self) {
+        match self.mc {
+            M1 => {
+                self.fetch_next();
+                todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -2620,6 +2782,7 @@ impl std::default::Default for Cpu {
             addr: 0x0000,
             data: 0x0000,
             ime: 0,
+            cb: 0,
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
