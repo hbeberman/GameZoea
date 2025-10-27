@@ -1485,13 +1485,18 @@ SkipIncA:
 
     // {{{ test swap_r8
     #[test]
-    #[ignore = "TODO"]
     fn execute_swap_r8() {
         const ROM: &[u8] = gbasm! {r#"
+  ld hl, 0xC000
+  ld b, 0xA5
+  ld [hl], b
+  swap [hl]
+  swap b
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.b(), 0x5A);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x5A);
     }
     // }}}
 

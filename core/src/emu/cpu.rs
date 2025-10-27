@@ -2455,12 +2455,51 @@ impl Cpu {
 
     // {{{ opcode swap_r8
     pub fn swap_r8(&mut self) {
+        let r8 = self.r8_operand();
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M3 => {
+                self.addr = self.hl();
+                self.mem_read();
+                self.set_z(self.data());
             }
-            M0 => self.set_mc(M2),
+            M2 => {
+                self.addr = self.hl();
+                self.data = self.z().rotate_right(4);
+                self.mem_write();
+
+                if self.data == 0 {
+                    self.set_zero(1);
+                } else {
+                    self.set_zero(0);
+                }
+                self.set_bcdn(0);
+                self.set_bcdh(0);
+                self.set_carry(0);
+            }
+            M1 => {
+                if r8 == R8::HL {
+                    self.fetch_next();
+                } else {
+                    self.set_r8(r8, self.r8(r8).rotate_right(4));
+
+                    if self.r8(r8) == 0 {
+                        self.set_zero(1);
+                    } else {
+                        self.set_zero(0);
+                    }
+                    self.set_bcdn(0);
+                    self.set_bcdh(0);
+                    self.set_carry(0);
+                    self.fetch_next();
+                }
+            }
+            M0 => {
+                if r8 == R8::HL {
+                    self.set_mc(M4)
+                } else {
+                    self.set_mc(M2)
+                }
+            }
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
