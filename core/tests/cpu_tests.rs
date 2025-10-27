@@ -1312,13 +1312,16 @@ SkipIncA:
 
     // {{{ test add_sp_imm8
     #[test]
-    #[ignore = "TODO"]
     fn execute_add_sp_imm8() {
         const ROM: &[u8] = gbasm! {r#"
+  add sp, -0x4
+  push de
+  add sp, 0x8
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.sp(), 0x0000);
+        assert_hex_eq!(cpu.mem_dbg_read(0xFFF8), 0xD8);
     }
     // }}}
 

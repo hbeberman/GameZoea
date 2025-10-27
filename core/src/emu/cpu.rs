@@ -2004,11 +2004,37 @@ impl Cpu {
     // {{{ opcode add_sp_imm8
     pub fn add_sp_imm8(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M4 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
             }
-            M0 => self.set_mc(M2),
+            M3 => {
+                self.addr = 0x0000;
+                let (r, c, h, _) = if self.z() & 0x80 != 0 {
+                    self.spl().halfcarry_sub(!(self.z()) + 0x1)
+                } else {
+                    self.spl().halfcarry_add(self.z())
+                };
+                self.set_bcdn(0);
+                self.set_bcdh(h);
+                self.set_carry(c);
+
+                self.set_z(r);
+                self.data = self.z();
+            }
+            M2 => {
+                self.addr = 0x0000;
+                let (r, _, _, _) = self.sph().halfcarry_add(self.carry());
+                self.set_w(r);
+                self.data = self.w();
+            }
+            M1 => {
+                self.set_sp(self.wz());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
@@ -2302,6 +2328,14 @@ impl Cpu {
 
     pub fn sp(&self) -> u16 {
         self.r.sp
+    }
+
+    pub fn spl(&self) -> u8 {
+        (self.r.sp & 0xFF) as u8
+    }
+
+    pub fn sph(&self) -> u8 {
+        ((self.r.sp & 0xFF00) >> 8) as u8
     }
 
     pub fn pc(&self) -> u16 {
