@@ -1253,13 +1253,14 @@ SkipIncA:
 
     // {{{ test ld_mimm16_a
     #[test]
-    #[ignore = "TODO"]
     fn execute_ld_mimm16_a() {
         const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  ld [0xC000], a
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xA5);
     }
     // }}}
 

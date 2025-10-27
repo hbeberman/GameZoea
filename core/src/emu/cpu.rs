@@ -1903,11 +1903,27 @@ impl Cpu {
     // {{{ opcode ld_mimm16_a
     pub fn ld_mimm16_a(&mut self) {
         match self.mc {
+            M4 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_z(self.data);
+                self.inc_pc();
+            }
+            M3 => {
+                self.addr = self.pc();
+                self.mem_read();
+                self.set_w(self.data);
+                self.inc_pc();
+            }
+            M2 => {
+                self.addr = self.wz();
+                self.data = self.a();
+                self.mem_write();
+            }
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
             }
-            M0 => self.set_mc(M2),
+            M0 => self.set_mc(M5),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
