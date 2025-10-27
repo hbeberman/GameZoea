@@ -1355,25 +1355,26 @@ SkipIncA:
 
     // {{{ test di
     #[test]
-    #[ignore = "TODO"]
     fn execute_di() {
         const ROM: &[u8] = gbasm! {r#"
+  ei
+  di
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.ime(), 0);
     }
     // }}}
 
     // {{{ test ei
     #[test]
-    #[ignore = "TODO"]
     fn execute_ei() {
         const ROM: &[u8] = gbasm! {r#"
+  ei
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.ime(), 1);
     }
     // }}}
 

@@ -2095,7 +2095,7 @@ impl Cpu {
         match self.mc {
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+                self.set_ime(0);
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -2108,7 +2108,7 @@ impl Cpu {
         match self.mc {
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+                self.set_ime(1);
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
