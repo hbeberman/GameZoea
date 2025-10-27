@@ -1266,13 +1266,17 @@ SkipIncA:
 
     // {{{ test ldh_a_mc
     #[test]
-    #[ignore = "TODO"]
     fn execute_ldh_a_mc() {
         const ROM: &[u8] = gbasm! {r#"
+  ld a, 0xA5
+  ld c, 0x80
+  ldh [c], a
+  ld a, 0x00
+  ldh a, [c]
         "#};
         let mut cpu = Cpu::init_dmg(ROM);
         cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        assert_hex_eq!(cpu.a(), 0xA5);
     }
     // }}}
 

@@ -1932,11 +1932,16 @@ impl Cpu {
     // {{{ opcode ldh_a_mc
     pub fn ldh_a_mc(&mut self) {
         match self.mc {
-            M1 => {
-                self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+            M2 => {
+                self.addr = 0xFF00 + self.c() as u16;
+                self.mem_read();
+                self.set_z(self.data);
             }
-            M0 => self.set_mc(M2),
+            M1 => {
+                self.set_a(self.z());
+                self.fetch_next();
+            }
+            M0 => self.set_mc(M3),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
