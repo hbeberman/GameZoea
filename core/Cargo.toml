@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 macros = { path = "../macros" }
+pixels = "0.15.0"
+winit = "0.30.12"
+winit_input_helper = "0.17.0"
