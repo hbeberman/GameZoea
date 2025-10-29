@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 use gamezoea::app::window;
 use gamezoea::emu::cpu::*;
-use std::{env, process};
+use std::{env, process, thread};
 
 const DEFAULT_SCALE: u32 = 1;
 
 fn main() {
+    let mut threads = vec![];
     let (scale, rom) = parse_args();
 
     let cpu = Cpu::default();
@@ -19,8 +20,27 @@ fn main() {
         }
     }
 
-    if let Err(err) = window::run(scale) {
-        eprintln!("Window error: {err}");
+    let shared_pixels = window::create_pixels_handle();
+
+    let window_pixels = shared_pixels.clone();
+
+    let window_thread = thread::spawn(move || {
+        if let Err(err) = window::run(scale, window_pixels) {
+            eprintln!("Window error: {err}");
+        }
+    });
+    threads.push(window_thread);
+
+    let gameboy_thread = thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    });
+
+    threads.push(gameboy_thread);
+
+    for thread in threads {
+        thread.join().unwrap();
     }
 }
 

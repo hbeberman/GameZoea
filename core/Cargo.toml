@@ -3,8 +3,13 @@ name = "gamezoea"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["x11", "wayland"]
+x11 = ["winit/x11"]
+wayland = ["winit/wayland"]
+
 [dependencies]
 macros = { path = "../macros" }
 pixels = "0.15.0"
-winit = "0.30.12"
+winit = { version = "0.30.12", default-features = false, features = ["x11", "wayland", "rwh_06"] }
 winit_input_helper = "0.17.0"
