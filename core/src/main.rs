@@ -1,6 +1,8 @@
-#![allow(dead_code)]
 use gamezoea::app::window;
-use gamezoea::emu::cpu::*;
+
+use gamezoea::emu::gb::*;
+use macros::*;
+
 use std::{env, process, thread};
 
 const DEFAULT_SCALE: u32 = 1;
@@ -9,9 +11,7 @@ fn main() {
     let mut threads = vec![];
     let (scale, rom) = parse_args();
 
-    let cpu = Cpu::default();
     println!("GameZoea!");
-    println!("{}", cpu);
     match &rom {
         Some(rom) => eprintln!("Opening rom {:?}", rom.display()),
         None => {
@@ -20,9 +20,15 @@ fn main() {
         }
     }
 
+    const ROM: &[u8] = gbasm! {r#"
+  inc a
+    "#};
+
     let shared_pixels = window::create_pixels_handle();
 
     let window_pixels = shared_pixels.clone();
+
+    let gameboy = Gameboy::new(ROM, shared_pixels.clone());
 
     let window_thread = thread::spawn(move || {
         if let Err(err) = window::run(scale, window_pixels) {
@@ -32,9 +38,7 @@ fn main() {
     threads.push(window_thread);
 
     let gameboy_thread = thread::spawn(move || {
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
+        gameboy.run();
     });
 
     threads.push(gameboy_thread);

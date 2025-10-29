@@ -178,11 +178,11 @@ impl ApplicationHandler for WindowApp {
                     }
                 };
 
-                if let Some(pixels) = pixels_guard.as_mut() {
-                    if let Err(err) = pixels.resize_surface(size.width, size.height) {
-                        eprintln!("failed to resize surface: {err}");
-                        event_loop.exit();
-                    }
+                if let Some(pixels) = pixels_guard.as_mut()
+                    && let Err(err) = pixels.resize_surface(size.width, size.height)
+                {
+                    eprintln!("failed to resize surface: {err}");
+                    event_loop.exit();
                 }
             }
             WindowEvent::RedrawRequested => {
@@ -195,14 +195,20 @@ impl ApplicationHandler for WindowApp {
                     }
                 };
 
-                if let Some(pixels) = pixels_guard.as_mut() {
-                    if let Err(err) = pixels.render() {
-                        eprintln!("failed to render frame: {err}");
-                        event_loop.exit();
-                    }
+                if let Some(pixels) = pixels_guard.as_mut()
+                    && let Err(err) = pixels.render()
+                {
+                    eprintln!("failed to render frame: {err}");
+                    event_loop.exit();
                 }
             }
             _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(window) = self.window.as_ref() {
+            window.request_redraw();
         }
     }
 }
