@@ -1,4 +1,4 @@
-use gamezoea::emu::cpu::*;
+use gamezoea::emu::gb::*;
 use macros::*;
 macro_rules! assert_hex_eq {
     ($a:expr, $b:expr) => {
@@ -12,87 +12,68 @@ mod tests {
 
     // {{{ Register Tests
     #[test]
-    fn cpu_default() {
-        let cpu = Cpu::default();
-
-        assert_hex_eq!(cpu.m(), 0);
-        assert_hex_eq!(cpu.t(), 0);
-        assert_hex_eq!(cpu.af(), 0x0000);
-        assert_hex_eq!(cpu.bc(), 0x0000);
-        assert_hex_eq!(cpu.de(), 0x0000);
-        assert_hex_eq!(cpu.hl(), 0x0000);
-        assert_hex_eq!(cpu.sp(), 0x0000);
-        assert_hex_eq!(cpu.pc(), 0x0000);
-    }
-
-    #[test]
     fn cpu_setters() {
-        let mut cpu = Cpu::default();
-        cpu.set_m(1337);
-        cpu.set_t(5348);
-        cpu.set_addr(0xCCCC);
-        cpu.set_data(0xDD);
-        cpu.set_ir(0xAA);
-        cpu.set_ie(0xBB);
-        cpu.set_af(0x1020);
-        cpu.set_bc(0x3040);
-        cpu.set_de(0x5060);
-        cpu.set_hl(0x7080);
-        cpu.set_sp(0x90A0);
-        cpu.set_pc(0xB0C0);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xCCCC);
+        gb.cpu.set_data(0xDD);
+        gb.cpu.set_ir(0xAA);
+        gb.cpu.set_ie(0xBB);
+        gb.cpu.set_af(0x1020);
+        gb.cpu.set_bc(0x3040);
+        gb.cpu.set_de(0x5060);
+        gb.cpu.set_hl(0x7080);
+        gb.cpu.set_sp(0x90A0);
+        gb.cpu.set_pc(0xB0C0);
 
-        assert_hex_eq!(cpu.m(), 1337);
-        assert_hex_eq!(cpu.t(), 5348);
-        assert_hex_eq!(cpu.addr(), 0xCCCC);
-        assert_hex_eq!(cpu.data(), 0xDD);
-        assert_hex_eq!(cpu.ir(), 0xAA);
-        assert_hex_eq!(cpu.ie(), 0xBB);
-        assert_hex_eq!(cpu.af(), 0x1020);
-        assert_hex_eq!(cpu.bc(), 0x3040);
-        assert_hex_eq!(cpu.de(), 0x5060);
-        assert_hex_eq!(cpu.hl(), 0x7080);
-        assert_hex_eq!(cpu.sp(), 0x90A0);
-        assert_hex_eq!(cpu.pc(), 0xB0C0);
+        assert_hex_eq!(gb.cpu.addr(), 0xCCCC);
+        assert_hex_eq!(gb.cpu.data(), 0xDD);
+        assert_hex_eq!(gb.cpu.ir(), 0xAA);
+        assert_hex_eq!(gb.cpu.ie(), 0xBB);
+        assert_hex_eq!(gb.cpu.af(), 0x1020);
+        assert_hex_eq!(gb.cpu.bc(), 0x3040);
+        assert_hex_eq!(gb.cpu.de(), 0x5060);
+        assert_hex_eq!(gb.cpu.hl(), 0x7080);
+        assert_hex_eq!(gb.cpu.sp(), 0x90A0);
+        assert_hex_eq!(gb.cpu.pc(), 0xB0C0);
     }
 
     #[test]
     fn cpu_flag_sets() {
-        let mut cpu = Cpu::default();
-        cpu.set_zero(1);
-        cpu.set_bcdn(1);
-        cpu.set_bcdh(1);
-        cpu.set_carry(1);
-        assert_hex_eq!(cpu.f(), 0xF0);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_zero(1);
+        gb.cpu.set_bcdn(1);
+        gb.cpu.set_bcdh(1);
+        gb.cpu.set_carry(1);
+        assert_hex_eq!(gb.cpu.f(), 0xF0);
     }
 
     #[test]
     fn cpu_flag_gets() {
-        let mut cpu = Cpu::default();
-        cpu.set_af(0x00F0);
-        assert_hex_eq!(cpu.zero(), 1);
-        assert_hex_eq!(cpu.bcdn(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_af(0x00F0);
+        assert_hex_eq!(gb.cpu.zero(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
 
     #[test]
     #[should_panic(expected = "Invalid value used as flag z: 02")]
     fn cpu_flag_z_invalid() {
-        let mut cpu = Cpu::default();
-        cpu.set_zero(2);
-        assert_hex_eq!(cpu.zero(), 1);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_zero(2);
+        assert_hex_eq!(gb.cpu.zero(), 1);
     }
     // }}}
 
     // {{{ Cycle Tests
     #[test]
-    fn cpu_t_tick() {
-        let mut cpu = Cpu::default();
-        assert_hex_eq!(cpu.t(), 0);
+    fn gameboy_tick() {
+        let mut gb = Gameboy::cartless_dmg();
+        assert_hex_eq!(gb.t, 0);
         for i in 1..16 {
-            cpu.tick_t1();
-            assert_hex_eq!(cpu.t(), i);
-            assert_hex_eq!(cpu.m(), i / 4);
+            gb.tick(1);
+            assert_hex_eq!(gb.t, i);
         }
     }
     // }}}
@@ -101,109 +82,109 @@ mod tests {
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to ROM bank 00: 0000:ab")]
     fn mem_rom_write() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0x0000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0x0000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to ROM bank 01-NN: 4000:ab")]
     fn mem_rom_bankable_write() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0x4000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0x4000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
 
     #[test]
     fn mem_write_read_vram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0x8000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_hex_eq!(cpu.mem_dbg_read(0x8000), 0xAB);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0x8000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0x8000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_external_ram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xA000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_hex_eq!(cpu.mem_dbg_read(0xA000), 0xAB);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xA000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xA000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_work_ram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xC000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xAB);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xC000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xAB);
     }
 
     #[test]
     fn mem_write_read_work_ram_bankable() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xD000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_hex_eq!(cpu.mem_dbg_read(0xD000), 0xAB);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xD000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xD000), 0xAB);
     }
 
     #[test]
     #[should_panic(expected = "Memory write to echo RAM: e000:ab")]
     fn mem_write_echo() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xE000);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xE000);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to OAM: fe00:ab")]
     fn mem_write_oam() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFE00);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xFE00);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "Memory write to not usable: fea0:ab")]
     fn mem_write_not_usable() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFEA0);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xFEA0);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to I/O registers: ff00:ab")]
     fn mem_write_io() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFF00);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xFF00);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
 
     #[test]
     fn mem_write_hram() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFF80);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
-        assert_hex_eq!(cpu.mem_dbg_read(0xFF80), 0xAB);
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xFF80);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFF80), 0xAB);
     }
 
     #[test]
     #[should_panic(expected = "not yet implemented: Memory write to IE register: ffff:ab")]
     fn mem_write_ie() {
-        let mut cpu = Cpu::default();
-        cpu.set_addr(0xFFFF);
-        cpu.set_data(0xAB);
-        cpu.mem_write();
+        let mut gb = Gameboy::cartless_dmg();
+        gb.cpu.set_addr(0xFFFF);
+        gb.cpu.set_data(0xAB);
+        gb.cpu.mem_write();
     }
     // }}}
 
@@ -213,9 +194,9 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   nop
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0152);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0152);
     }
     // }}}
 
@@ -228,13 +209,13 @@ mod tests {
   ld hl, 0x0506
   ld sp, 0x0708
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x015D);
-        assert_hex_eq!(cpu.bc(), 0x0102);
-        assert_hex_eq!(cpu.de(), 0x0304);
-        assert_hex_eq!(cpu.hl(), 0x0506);
-        assert_hex_eq!(cpu.sp(), 0x0708);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x015D);
+        assert_hex_eq!(gb.cpu.bc(), 0x0102);
+        assert_hex_eq!(gb.cpu.de(), 0x0304);
+        assert_hex_eq!(gb.cpu.hl(), 0x0506);
+        assert_hex_eq!(gb.cpu.sp(), 0x0708);
     }
     // }}}
 
@@ -252,15 +233,15 @@ mod tests {
   ld [hl-], a
   ld [hl-], a
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x2);
-        assert_hex_eq!(cpu.mem_dbg_read(0xD000), 0x2);
-        assert_hex_eq!(cpu.hl(), 0xD0EF);
-        assert_hex_eq!(cpu.mem_dbg_read(0xD0EF), 0x0);
-        assert_hex_eq!(cpu.mem_dbg_read(0xD0F0), 0x2);
-        assert_hex_eq!(cpu.mem_dbg_read(0xD0F1), 0x2);
-        assert_hex_eq!(cpu.mem_dbg_read(0xD0F2), 0x0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x2);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xD000), 0x2);
+        assert_hex_eq!(gb.cpu.hl(), 0xD0EF);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xD0EF), 0x0);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xD0F0), 0x2);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xD0F1), 0x2);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xD0F2), 0x0);
     }
     // }}}
 
@@ -284,9 +265,9 @@ mod tests {
   ld a, [hl+]
   dec a
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x01);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
     }
     // }}}
 
@@ -296,11 +277,11 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   ld [0xC000], sp
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0154);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xFE);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC001), 0xFF);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0154);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xFE);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC001), 0xFF);
     }
     // }}}
 
@@ -313,18 +294,18 @@ mod tests {
   inc hl
   inc sp
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0155);
-        assert_hex_eq!(cpu.sp(), 0xFFFF);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.bc(), 0x0014);
-        assert_hex_eq!(cpu.de(), 0x00D9);
-        assert_hex_eq!(cpu.hl(), 0x014E);
-        assert_hex_eq!(cpu.zero(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.bcdn(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0155);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFF);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.bc(), 0x0014);
+        assert_hex_eq!(gb.cpu.de(), 0x00D9);
+        assert_hex_eq!(gb.cpu.hl(), 0x014E);
+        assert_hex_eq!(gb.cpu.zero(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
     }
     // }}}
 
@@ -337,18 +318,18 @@ mod tests {
   dec hl
   dec sp
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0155);
-        assert_hex_eq!(cpu.sp(), 0xFFFD);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.bc(), 0x0012);
-        assert_hex_eq!(cpu.de(), 0x00D7);
-        assert_hex_eq!(cpu.hl(), 0x014C);
-        assert_hex_eq!(cpu.zero(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.bcdn(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0155);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFD);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.bc(), 0x0012);
+        assert_hex_eq!(gb.cpu.de(), 0x00D7);
+        assert_hex_eq!(gb.cpu.hl(), 0x014C);
+        assert_hex_eq!(gb.cpu.zero(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
     }
     // }}}
 
@@ -361,18 +342,18 @@ mod tests {
   add hl, hl
   add hl, sp
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0155);
-        assert_hex_eq!(cpu.sp(), 0xFFFE);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.bc(), 0x0013);
-        assert_hex_eq!(cpu.de(), 0x00D8);
-        assert_hex_eq!(cpu.hl(), 0x046E);
-        assert_hex_eq!(cpu.zero(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.bcdn(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0155);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFE);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.bc(), 0x0013);
+        assert_hex_eq!(gb.cpu.de(), 0x00D8);
+        assert_hex_eq!(gb.cpu.hl(), 0x046E);
+        assert_hex_eq!(gb.cpu.zero(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
     }
     // }}}
 
@@ -394,18 +375,18 @@ mod tests {
   inc l
   inc l
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.sp(), 0xFFFE);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.bc(), 0x0114);
-        assert_hex_eq!(cpu.de(), 0x01D9);
-        assert_hex_eq!(cpu.hl(), 0x0250);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.carry(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x01);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFE);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.bc(), 0x0114);
+        assert_hex_eq!(gb.cpu.de(), 0x01D9);
+        assert_hex_eq!(gb.cpu.hl(), 0x0250);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.carry(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x01);
     }
     // }}}
 
@@ -424,18 +405,18 @@ mod tests {
   dec h
   dec b
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.sp(), 0xFFFE);
-        assert_hex_eq!(cpu.a(), 0x00);
-        assert_hex_eq!(cpu.bc(), 0xFF12);
-        assert_hex_eq!(cpu.de(), 0xFFD7);
-        assert_hex_eq!(cpu.hl(), 0xBFFF);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.carry(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.bcdn(), 1);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xFF);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFE);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
+        assert_hex_eq!(gb.cpu.bc(), 0xFF12);
+        assert_hex_eq!(gb.cpu.de(), 0xFFD7);
+        assert_hex_eq!(gb.cpu.hl(), 0xBFFF);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.carry(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xFF);
     }
     // }}}
 
@@ -453,14 +434,14 @@ mod tests {
   ld l, 0x06
   ld a, 0x00
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0164);
-        assert_hex_eq!(cpu.bc(), 0x0102);
-        assert_hex_eq!(cpu.de(), 0x0304);
-        assert_hex_eq!(cpu.hl(), 0x0506);
-        assert_hex_eq!(cpu.a(), 0x00);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xA5);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0164);
+        assert_hex_eq!(gb.cpu.bc(), 0x0102);
+        assert_hex_eq!(gb.cpu.de(), 0x0304);
+        assert_hex_eq!(gb.cpu.hl(), 0x0506);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xA5);
     }
     // }}}
 
@@ -471,10 +452,10 @@ mod tests {
   ld a, 0xA5
   rlca
     "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x4B);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x4B);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -486,10 +467,10 @@ mod tests {
   rrca
   rrca
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x88);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x88);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -501,10 +482,10 @@ mod tests {
   rla
   rla
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x12);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x12);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -516,10 +497,10 @@ mod tests {
   rra
   rra
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x48);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x48);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -533,9 +514,9 @@ mod tests {
   add a, 0x35
   daa
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x75);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x75);
     }
     // }}}
 
@@ -546,11 +527,11 @@ mod tests {
   ld a, 0xA5
   cpl
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x5A);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.bcdn(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x5A);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
     }
     // }}}
 
@@ -561,10 +542,10 @@ mod tests {
   inc a
   scf
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -576,12 +557,12 @@ mod tests {
   dec a
   ccf
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x0F);
-        assert_hex_eq!(cpu.carry(), 0);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x0F);
+        assert_hex_eq!(gb.cpu.carry(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 0);
     }
     // }}}
 
@@ -599,13 +580,13 @@ mod tests {
   inc hl
   jr .deadend
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0156);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.bc(), 0x0014);
-        assert_hex_eq!(cpu.de(), 0x00D9);
-        assert_hex_eq!(cpu.hl(), 0x014E);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0156);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.bc(), 0x0014);
+        assert_hex_eq!(gb.cpu.de(), 0x00D9);
+        assert_hex_eq!(gb.cpu.hl(), 0x014E);
     }
     // }}}
 
@@ -636,14 +617,14 @@ mod tests {
   jr nz,.backjump
   halt
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0156);
-        assert_hex_eq!(cpu.a(), 0xFF);
-        assert_hex_eq!(cpu.bc(), 0x0013);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0156);
+        assert_hex_eq!(gb.cpu.a(), 0xFF);
+        assert_hex_eq!(gb.cpu.bc(), 0x0013);
         // This is actually a problem, something is clearing carry
-        assert_hex_eq!(cpu.de(), 0x01D9);
-        assert_hex_eq!(cpu.hl(), 0x024D);
+        assert_hex_eq!(gb.cpu.de(), 0x01D9);
+        assert_hex_eq!(gb.cpu.hl(), 0x024D);
     }
     // }}}
 
@@ -653,9 +634,9 @@ mod tests {
     fn execute_stop() {
         const ROM: &[u8] = gbasm! {r#"
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
     }
     // }}}
 
@@ -672,15 +653,15 @@ mod tests {
   inc a
   ld a, l
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.b(), 0x01);
-        assert_hex_eq!(cpu.c(), 0x01);
-        assert_hex_eq!(cpu.d(), 0x01);
-        assert_hex_eq!(cpu.e(), 0x01);
-        assert_hex_eq!(cpu.h(), 0x01);
-        assert_hex_eq!(cpu.l(), 0x01);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.b(), 0x01);
+        assert_hex_eq!(gb.cpu.c(), 0x01);
+        assert_hex_eq!(gb.cpu.d(), 0x01);
+        assert_hex_eq!(gb.cpu.e(), 0x01);
+        assert_hex_eq!(gb.cpu.h(), 0x01);
+        assert_hex_eq!(gb.cpu.l(), 0x01);
     }
     // }}}
 
@@ -692,11 +673,11 @@ mod tests {
     ld [hl], a
     ld b, [hl]
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x01);
-        assert_hex_eq!(cpu.b(), 0x01);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x01);
+        assert_hex_eq!(gb.cpu.b(), 0x01);
     }
     // }}}
 
@@ -706,9 +687,9 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   inc a
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.pc(), 0x0152);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.pc(), 0x0152);
     }
     // }}}
 
@@ -722,10 +703,10 @@ mod tests {
   add a, [hl]
   add a, a
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x28);
-        assert_hex_eq!(cpu.bcdn(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x28);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
     }
     // }}}
 
@@ -740,10 +721,10 @@ mod tests {
   adc a, b
   adc a, e
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0xDA);
-        assert_hex_eq!(cpu.bcdn(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0xDA);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
     }
     // }}}
 
@@ -758,10 +739,10 @@ mod tests {
   sub a, b
   sub a, e
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x2B);
-        assert_hex_eq!(cpu.bcdn(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x2B);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
     }
     // }}}
 
@@ -776,10 +757,10 @@ mod tests {
   sbc a, b
   sbc a, e
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x28);
-        assert_hex_eq!(cpu.bcdn(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x28);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
     }
     // }}}
 
@@ -794,13 +775,13 @@ mod tests {
   and a, [hl]
   and a, c
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x12);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x12);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 0);
     }
     // }}}
 
@@ -815,13 +796,13 @@ mod tests {
   xor a, [hl]
   xor a, c
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x32);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 0);
-        assert_hex_eq!(cpu.carry(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x32);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 0);
+        assert_hex_eq!(gb.cpu.carry(), 0);
     }
     // }}}
 
@@ -836,13 +817,13 @@ mod tests {
   or a, [hl]
   or a, c
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x7F);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 0);
-        assert_hex_eq!(cpu.carry(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x7F);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 0);
+        assert_hex_eq!(gb.cpu.carry(), 0);
     }
     // }}}
 
@@ -863,13 +844,13 @@ mod tests {
   inc a
 .skip2
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x2A);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x2A);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -879,13 +860,13 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   add a, 0xFF
     "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
-        assert_hex_eq!(cpu.zero(), 1);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
+        assert_hex_eq!(gb.cpu.zero(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -895,13 +876,13 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   adc a, 0xFF
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -911,13 +892,13 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   sub a, 0xFF
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -927,13 +908,13 @@ mod tests {
         const ROM: &[u8] = gbasm! {r#"
   sbc a, 0xFD
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x03);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 1);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x03);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -944,13 +925,13 @@ mod tests {
   ld a, 0xA5
   and a, 0x05
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x05);
-        assert_hex_eq!(cpu.zero(), 0);
-        assert_hex_eq!(cpu.bcdn(), 0);
-        assert_hex_eq!(cpu.bcdh(), 1);
-        assert_hex_eq!(cpu.carry(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x05);
+        assert_hex_eq!(gb.cpu.zero(), 0);
+        assert_hex_eq!(gb.cpu.bcdn(), 0);
+        assert_hex_eq!(gb.cpu.bcdh(), 1);
+        assert_hex_eq!(gb.cpu.carry(), 0);
     }
     // }}}
 
@@ -961,9 +942,9 @@ mod tests {
   ld a, 0xA5
   xor a, 0x06
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0xA3);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0xA3);
     }
     // }}}
 
@@ -974,9 +955,9 @@ mod tests {
   ld a, 0xA5
   or a, 0x16
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0xB7);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0xB7);
     }
     // }}}
 
@@ -990,13 +971,13 @@ mod tests {
   inc a
 .skip
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x2A);
-        assert_hex_eq!(cpu.zero(), 1);
-        assert_hex_eq!(cpu.bcdn(), 1);
-        assert_hex_eq!(cpu.bcdh(), 0);
-        assert_hex_eq!(cpu.carry(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x2A);
+        assert_hex_eq!(gb.cpu.zero(), 1);
+        assert_hex_eq!(gb.cpu.bcdn(), 1);
+        assert_hex_eq!(gb.cpu.bcdh(), 0);
+        assert_hex_eq!(gb.cpu.carry(), 0);
     }
     // }}}
 
@@ -1012,13 +993,13 @@ mod tests {
   inc b
   ret nz
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.b(), 0x01);
-        assert_hex_eq!(cpu.pc(), 0x155);
-        assert_hex_eq!(cpu.sp(), 0xFFFE);
-        assert_hex_eq!(cpu.ime(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.b(), 0x01);
+        assert_hex_eq!(gb.cpu.pc(), 0x155);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFE);
+        assert_hex_eq!(gb.cpu.ime(), 0);
     }
     // }}}
 
@@ -1032,12 +1013,12 @@ mod tests {
 .foo
   ret
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.pc(), 0x155);
-        assert_hex_eq!(cpu.sp(), 0xFFFE);
-        assert_hex_eq!(cpu.ime(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.pc(), 0x155);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFE);
+        assert_hex_eq!(gb.cpu.ime(), 0);
     }
     // }}}
 
@@ -1051,12 +1032,12 @@ mod tests {
 .foo
   reti
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.pc(), 0x155);
-        assert_hex_eq!(cpu.sp(), 0xFFFE);
-        assert_hex_eq!(cpu.ime(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.pc(), 0x155);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFE);
+        assert_hex_eq!(gb.cpu.ime(), 1);
     }
     // }}}
 
@@ -1080,10 +1061,10 @@ Test4:
 inc a
 halt
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x01);
-        assert_hex_eq!(cpu.pc(), 0x155);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
+        assert_hex_eq!(gb.cpu.pc(), 0x155);
     }
     // }}}
 
@@ -1100,11 +1081,11 @@ SkipIncA:
   inc b
   jp Backwards
             "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(30);
-        assert_hex_eq!(cpu.bc(), 0x0114);
-        assert_hex_eq!(cpu.pc(), 0x0156);
-        assert_hex_eq!(cpu.a(), 0x01);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 30);
+        assert_hex_eq!(gb.cpu.bc(), 0x0114);
+        assert_hex_eq!(gb.cpu.pc(), 0x0156);
+        assert_hex_eq!(gb.cpu.a(), 0x01);
     }
     // }}}
 
@@ -1119,10 +1100,10 @@ SkipIncA:
   inc a
   halt
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.pc(), 0x0157);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.pc(), 0x0157);
     }
     // }}}
 
@@ -1139,13 +1120,13 @@ SkipIncA:
 .foo
   inc a
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x03);
-        assert_hex_eq!(cpu.sp(), 0xFFFC);
-        assert_hex_eq!(cpu.pc(), 0x15C);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFD), 0x01);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFC), 0x57);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x03);
+        assert_hex_eq!(gb.cpu.sp(), 0xFFFC);
+        assert_hex_eq!(gb.cpu.pc(), 0x15C);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x57);
     }
     // }}}
 
@@ -1158,12 +1139,12 @@ SkipIncA:
 .foo
   inc a
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
-        assert_hex_eq!(cpu.pc(), 0x0156);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFD), 0x01);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFC), 0x53);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.pc(), 0x0156);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x53);
     }
     // }}}
 
@@ -1173,11 +1154,11 @@ SkipIncA:
         const ROM: &[u8] = gbasm! {r#"
   rst 0x18
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(7);
-        assert_hex_eq!(cpu.pc(), 0x151);
-        cpu.mtick(1);
-        assert_hex_eq!(cpu.pc(), 0x18);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(28);
+        assert_hex_eq!(gb.cpu.pc(), 0x151);
+        gb.tick(4);
+        assert_hex_eq!(gb.cpu.pc(), 0x18);
     }
 
     // {{{ test pop_r16stk
@@ -1195,12 +1176,12 @@ SkipIncA:
   pop hl
   pop af
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.bc(), 0x1A2B);
-        assert_hex_eq!(cpu.de(), 0x1A2B);
-        assert_hex_eq!(cpu.hl(), 0x1A2B);
-        assert_hex_eq!(cpu.af(), 0x1A2B);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.bc(), 0x1A2B);
+        assert_hex_eq!(gb.cpu.de(), 0x1A2B);
+        assert_hex_eq!(gb.cpu.hl(), 0x1A2B);
+        assert_hex_eq!(gb.cpu.af(), 0x1A2B);
     }
     // }}}
 
@@ -1213,17 +1194,17 @@ SkipIncA:
   push hl
   push af
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.af(), 0x01B0);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFD), 0x00);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFC), 0x13);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFB), 0x00);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFFA), 0xD8);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFF9), 0x01);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFF8), 0x4D);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFF7), 0x01);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFF6), 0xB0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.af(), 0x01B0);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x00);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x13);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFB), 0x00);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFA), 0xD8);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFF9), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFF8), 0x4D);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFF7), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFF6), 0xB0);
     }
     // }}}
 
@@ -1235,9 +1216,9 @@ SkipIncA:
   ld c, 0x80
   ldh [c], a
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFF80), 0xA5);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFF80), 0xA5);
     }
     // }}}
 
@@ -1248,9 +1229,9 @@ SkipIncA:
   ld a, 0xA5
   ldh [0xFF80], a
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFF80), 0xA5);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFF80), 0xA5);
     }
     // }}}
 
@@ -1261,9 +1242,9 @@ SkipIncA:
   ld a, 0xA5
   ld [0xC000], a
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xA5);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xA5);
     }
     // }}}
 
@@ -1277,9 +1258,9 @@ SkipIncA:
   ld a, 0x00
   ldh a, [c]
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0xA5);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0xA5);
     }
     // }}}
 
@@ -1292,9 +1273,9 @@ SkipIncA:
   ld a, 0x00
   ldh a, [0xFF80]
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0xA5);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0xA5);
     }
     // }}}
 
@@ -1307,9 +1288,9 @@ SkipIncA:
   ld a, 0x00
   ld a, [0xC000]
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x00);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
     }
     // }}}
 
@@ -1321,10 +1302,10 @@ SkipIncA:
   push de
   add sp, 0x8
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.sp(), 0x0000);
-        assert_hex_eq!(cpu.mem_dbg_read(0xFFF8), 0xD8);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.sp(), 0x0000);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFF8), 0xD8);
     }
     // }}}
 
@@ -1337,10 +1318,10 @@ SkipIncA:
   ld c, l
   ld hl, sp+0x1
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.bc(), 0xFFFD);
-        assert_hex_eq!(cpu.hl(), 0xFFFF);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.bc(), 0xFFFD);
+        assert_hex_eq!(gb.cpu.hl(), 0xFFFF);
     }
     // }}}
 
@@ -1350,9 +1331,9 @@ SkipIncA:
         const ROM: &[u8] = gbasm! {r#"
   ld sp, hl
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.sp(), 0x014D);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.sp(), 0x014D);
     }
     // }}}
 
@@ -1363,9 +1344,9 @@ SkipIncA:
   ei
   di
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.ime(), 0);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.ime(), 0);
     }
     // }}}
 
@@ -1375,9 +1356,9 @@ SkipIncA:
         const ROM: &[u8] = gbasm! {r#"
   ei
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.ime(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.ime(), 1);
     }
     // }}}
     // CB Opcodes
@@ -1392,10 +1373,10 @@ SkipIncA:
   rlc [hl]
   rlc b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x22);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x22);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x22);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x22);
     }
     // }}}
 
@@ -1409,10 +1390,10 @@ SkipIncA:
   rrc [hl]
   rrc b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x22);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x22);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x22);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x22);
     }
     // }}}
 
@@ -1426,10 +1407,10 @@ SkipIncA:
   rl [hl]
   rl b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x66);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x67);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x66);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x67);
     }
     // }}}
 
@@ -1443,10 +1424,10 @@ SkipIncA:
   rr [hl]
   rr b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x7A);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xFA);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x7A);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xFA);
     }
     // }}}
 
@@ -1460,11 +1441,11 @@ SkipIncA:
   sla [hl]
   sla b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x4A);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x4A);
-        assert_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x4A);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x4A);
+        assert_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -1478,11 +1459,11 @@ SkipIncA:
   sra [hl]
   sra b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0xD2);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0xD2);
-        assert_eq!(cpu.carry(), 1);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0xD2);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0xD2);
+        assert_eq!(gb.cpu.carry(), 1);
     }
     // }}}
 
@@ -1496,10 +1477,10 @@ SkipIncA:
   swap [hl]
   swap b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x5A);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x5A);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x5A);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x5A);
     }
     // }}}
 
@@ -1513,10 +1494,10 @@ SkipIncA:
   srl [hl]
   srl b
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.b(), 0x52);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x52);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.b(), 0x52);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x52);
     }
     // }}}
 
@@ -1543,9 +1524,9 @@ SkipIncA:
   halt
   test3:
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.a(), 0x02);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
     }
     // }}}
 
@@ -1559,10 +1540,10 @@ SkipIncA:
   res 0, c
   res 7, [hl]
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.c(), 0xA4);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x25);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.c(), 0xA4);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x25);
     }
     // }}}
 
@@ -1576,10 +1557,10 @@ SkipIncA:
   set 0, c
   set 7, [hl]
         "#};
-        let mut cpu = Cpu::init_dmg(ROM);
-        cpu.mtick(200);
-        assert_hex_eq!(cpu.c(), 0x01);
-        assert_hex_eq!(cpu.mem_dbg_read(0xC000), 0x80);
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.c(), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x80);
     }
     // }}}
 

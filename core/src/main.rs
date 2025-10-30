@@ -28,8 +28,6 @@ fn main() {
 
     let window_pixels = shared_pixels.clone();
 
-    let gameboy = Gameboy::new(ROM, shared_pixels.clone());
-
     let window_thread = thread::spawn(move || {
         if let Err(err) = window::run(scale, window_pixels) {
             eprintln!("Window error: {err}");
@@ -37,7 +35,9 @@ fn main() {
     });
     threads.push(window_thread);
 
+    let gameboy_pixels = shared_pixels.clone();
     let gameboy_thread = thread::spawn(move || {
+        let gameboy = Gameboy::dmg(ROM, gameboy_pixels);
         gameboy.run();
     });
 

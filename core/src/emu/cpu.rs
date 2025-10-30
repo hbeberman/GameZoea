@@ -1,5 +1,8 @@
+use crate::emu::mem::Memory;
 use macros::*;
+use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 
 #[allow(dead_code)]
 const M43: u8 = 0b00011000;
@@ -196,12 +199,8 @@ pub struct Registers {
 }
 
 pub struct Cpu {
-    mem: [u8; 0xFFFF],
-    m: u128,
-    t: u128,
+    mem: Rc<RefCell<Memory>>,
     r: Registers,
-    addr: u16,
-    data: u8,
     ime: u8,
     cb: u8,
     mc: Mc,
@@ -346,9 +345,9 @@ impl Cpu {
     }
 
     pub fn fetch_next(&mut self) {
-        self.addr = self.pc();
+        self.set_addr(self.pc());
         self.mem_read();
-        self.set_ir(self.data);
+        self.set_ir(self.data());
         self.inc_pc();
         self.mc = M0;
         self.executing = self.decode();
@@ -361,9 +360,9 @@ impl Cpu {
     }
 
     pub fn pop_imm8_into_z(&mut self) {
-        self.addr = self.pc();
+        self.set_addr(self.pc());
         self.mem_read();
-        self.set_z(self.data);
+        self.set_z(self.data());
         self.inc_pc();
     }
 
@@ -371,10 +370,12 @@ impl Cpu {
         1 << ((self.ir() & M543) >> 3)
     }
 
-    pub fn init_dmg(cartridge: &[u8]) -> Self {
-        let mut mem = [0u8; 0xFFFF];
-        mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
+    pub fn init_dmg(rom: &[u8]) -> Self {
+        let mem = Rc::new(RefCell::new(Memory::new(rom)));
+        Self::init_dmg_with_memory(mem)
+    }
 
+    pub fn init_dmg_with_memory(mem: Rc<RefCell<Memory>>) -> Self {
         let r = Registers {
             ir: 0x00,
             ie: 0x00,
@@ -388,11 +389,7 @@ impl Cpu {
         };
         Cpu {
             mem,
-            m: 0,
-            t: 0,
             r,
-            addr: 0x0000,
-            data: 0x0000,
             ime: 0,
             cb: 0,
             mc: Mc::M1,
@@ -416,15 +413,15 @@ impl Cpu {
         let r16 = R16::from((self.ir() & M54) >> 4);
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M1 => {
@@ -442,8 +439,8 @@ impl Cpu {
         match self.mc {
             M2 => {
                 let r16mem = R16mem::from((self.ir() & M54) >> 4);
-                self.addr = self.r16mem(r16mem);
-                self.data = self.a();
+                self.set_addr(self.r16mem(r16mem));
+                self.set_data(self.a());
                 self.mem_write();
 
                 match r16mem {
@@ -464,9 +461,9 @@ impl Cpu {
         match self.mc {
             M2 => {
                 let r16mem = R16mem::from((self.ir() & M54) >> 4);
-                self.addr = self.r16mem(r16mem);
+                self.set_addr(self.r16mem(r16mem));
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
 
                 match r16mem {
                     R16mem::HLi => self.set_hl(self.hl() + 1),
@@ -488,26 +485,26 @@ impl Cpu {
     pub fn ld_mimm16_sp(&mut self) {
         match self.mc {
             M5 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M4 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M3 => {
-                self.addr = self.wz();
-                self.data = self.lo(R16::SP);
+                self.set_addr(self.wz());
+                self.set_data(self.lo(R16::SP));
                 self.mem_write();
                 self.set_wz(self.wz() + 1);
             }
             M2 => {
-                self.addr = self.wz();
-                self.data = self.hi(R16::SP);
+                self.set_addr(self.wz());
+                self.set_data(self.hi(R16::SP));
                 self.mem_write();
             }
             M1 => {
@@ -523,7 +520,7 @@ impl Cpu {
     pub fn inc_r16(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.r16(R16::from((self.ir() & M54) >> 4));
+                self.set_addr(self.r16(R16::from((self.ir() & M54) >> 4)));
             }
             M1 => {
                 let r16 = R16::from((self.ir() & M54) >> 4);
@@ -544,7 +541,7 @@ impl Cpu {
     pub fn dec_r16(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.r16(R16::from((self.ir() & M54) >> 4));
+                self.set_addr(self.r16(R16::from((self.ir() & M54) >> 4)));
             }
             M1 => {
                 let r16 = R16::from((self.ir() & M54) >> 4);
@@ -565,7 +562,7 @@ impl Cpu {
     pub fn add_hl_r16(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 let r16 = R16::from((self.ir() & M54) >> 4);
                 let (r, c, h, _) = self.l().halfcarry_add(self.lo(r16));
                 eprintln!(
@@ -640,7 +637,7 @@ impl Cpu {
     pub fn inc_mhl(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -653,7 +650,7 @@ impl Cpu {
                 self.set_bcdn(0);
                 self.set_bcdh(h);
 
-                self.data = result;
+                self.set_data(result);
                 self.mem_write();
             }
             M1 => self.fetch_next(),
@@ -689,7 +686,7 @@ impl Cpu {
     pub fn dec_mhl(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -702,7 +699,7 @@ impl Cpu {
                 self.set_bcdn(1);
                 self.set_bcdh(h);
 
-                self.data = result;
+                self.set_data(result);
                 self.mem_write();
             }
             M1 => self.fetch_next(),
@@ -733,14 +730,14 @@ impl Cpu {
     pub fn ld_mhl_imm8(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = self.hl();
-                self.data = self.z();
+                self.set_addr(self.hl());
+                self.set_data(self.z());
                 self.mem_write();
             }
             M1 => self.fetch_next(),
@@ -912,18 +909,18 @@ impl Cpu {
     pub fn jr_imm8(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
                 // ??? are the lower 8 bits of addr ignored by IDU here?
-                self.addr = (self.pch() as u16) << 8;
+                self.set_addr((self.pch() as u16) << 8);
                 let zsign = self.z() >> 7 == 0x01;
                 let (r, c) = self.z().overflowing_add(self.pcl());
                 self.set_z(r);
-                self.data = r;
+                self.set_data(r);
                 let w = if c && !zsign {
                     self.pch() + 1
                 } else if !c && zsign {
@@ -944,19 +941,19 @@ impl Cpu {
     pub fn jr_cond_imm8(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
                 if self.cond() {
                     // ??? are the lower 8 bits of addr ignored by IDU here?
-                    self.addr = (self.pch() as u16) << 8;
+                    self.set_addr((self.pch() as u16) << 8);
                     let zsign = self.z() >> 7 == 0x01;
                     let (r, c) = self.z().overflowing_add(self.pcl());
                     self.set_z(r);
-                    self.data = r;
+                    self.set_data(r);
                     let w = if c && !zsign {
                         self.pch() + 1
                     } else if !c && zsign {
@@ -966,7 +963,7 @@ impl Cpu {
                     };
                     self.set_w(w);
                 } else {
-                    self.addr = self.pc();
+                    self.set_addr(self.pc());
                     self.mem_read();
                     self.set_z(self.data());
                     self.inc_pc();
@@ -1025,7 +1022,7 @@ impl Cpu {
     pub fn ld_r8_mhl(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1045,8 +1042,8 @@ impl Cpu {
         match self.mc {
             M2 => {
                 let r8_source = self.r8_operand();
-                self.addr = self.hl();
-                self.data = self.r8(r8_source);
+                self.set_addr(self.hl());
+                self.set_data(self.r8(r8_source));
                 self.mem_write();
             }
             M1 => {
@@ -1079,7 +1076,7 @@ impl Cpu {
     pub fn add_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1111,7 +1108,7 @@ impl Cpu {
     pub fn adc_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1144,7 +1141,7 @@ impl Cpu {
     pub fn sub_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1176,7 +1173,7 @@ impl Cpu {
     pub fn sbc_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1209,7 +1206,7 @@ impl Cpu {
     pub fn and_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1246,7 +1243,7 @@ impl Cpu {
     pub fn xor_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1283,7 +1280,7 @@ impl Cpu {
     pub fn or_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1320,7 +1317,7 @@ impl Cpu {
     pub fn cp_a_r8(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
@@ -1549,25 +1546,25 @@ impl Cpu {
     // {{{ opcode ret_cond
     pub fn ret_cond(&mut self) {
         match self.mc {
-            M5 => self.addr = 0x0000,
+            M5 => self.set_addr(0x0000),
             M4 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_sp();
             }
             M3 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_sp();
             }
             M2 => {
                 if self.cond() {
-                    self.addr = 0x0000;
+                    self.set_addr(0x0000);
                     self.set_pc(self.wz());
                 } else {
-                    self.addr = 0x0000;
+                    self.set_addr(0x0000);
                 }
             }
             M1 => {
@@ -1589,19 +1586,19 @@ impl Cpu {
     pub fn ret(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_sp();
             }
             M3 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_sp();
             }
             M2 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 self.set_pc(self.wz());
             }
             M1 => {
@@ -1617,19 +1614,19 @@ impl Cpu {
     pub fn reti(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_sp();
             }
             M3 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_sp();
             }
             M2 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 self.set_pc(self.wz());
                 self.set_ime(1);
             }
@@ -1646,32 +1643,32 @@ impl Cpu {
     pub fn jp_cond_imm16(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M3 => {
                 if self.cond() {
-                    self.addr = self.pc();
+                    self.set_addr(self.pc());
                     self.mem_read();
-                    self.set_w(self.data);
+                    self.set_w(self.data());
                     self.inc_pc();
                 } else {
-                    self.addr = self.pc();
+                    self.set_addr(self.pc());
                     self.mem_read();
-                    self.set_z(self.data);
+                    self.set_z(self.data());
                     self.inc_pc();
                 }
             }
             M2 => {
                 if self.cond() {
-                    self.addr = 0x0000;
+                    self.set_addr(0x0000);
                     self.set_pc(self.wz());
                 } else {
-                    self.addr = self.pc();
+                    self.set_addr(self.pc());
                     self.mem_read();
-                    self.set_w(self.data);
+                    self.set_w(self.data());
                     self.inc_pc();
                 }
             }
@@ -1694,19 +1691,19 @@ impl Cpu {
     pub fn jp_imm16(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 self.set_pc(self.wz());
             }
             M1 => self.fetch_next(),
@@ -1719,7 +1716,7 @@ impl Cpu {
     pub fn jp_hl(&mut self) {
         match self.mc {
             M1 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_ir(self.data());
                 self.set_pc(self.hl() + 1);
@@ -1737,41 +1734,41 @@ impl Cpu {
     pub fn call_cond_imm16(&mut self) {
         match self.mc {
             M6 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M5 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M4 => self.dec_sp(),
             M3 => {
                 if self.cond() {
                     self.set_addr(self.sp());
-                    self.data = self.pch();
+                    self.set_data(self.pch());
                     self.mem_write();
                     self.dec_sp();
                 } else {
-                    self.addr = self.pc();
+                    self.set_addr(self.pc());
                     self.mem_read();
-                    self.set_z(self.data);
+                    self.set_z(self.data());
                     self.inc_pc();
                 }
             }
             M2 => {
                 if self.cond() {
                     self.set_addr(self.sp());
-                    self.data = self.pcl();
+                    self.set_data(self.pcl());
                     self.mem_write();
                     self.set_pc(self.wz());
                 } else {
-                    self.addr = self.pc();
+                    self.set_addr(self.pc());
                     self.mem_read();
-                    self.set_w(self.data);
+                    self.set_w(self.data());
                     self.inc_pc();
                 }
             }
@@ -1794,27 +1791,27 @@ impl Cpu {
     pub fn call_imm16(&mut self) {
         match self.mc {
             M6 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M5 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M4 => self.dec_sp(),
             M3 => {
                 self.set_addr(self.sp());
-                self.data = self.pch();
+                self.set_data(self.pch());
                 self.mem_write();
                 self.dec_sp();
             }
             M2 => {
                 self.set_addr(self.sp());
-                self.data = self.pcl();
+                self.set_data(self.pcl());
                 self.mem_write();
                 self.set_pc(self.wz());
             }
@@ -1833,13 +1830,13 @@ impl Cpu {
             M4 => self.dec_sp(),
             M3 => {
                 self.set_addr(self.sp());
-                self.data = self.pch();
+                self.set_data(self.pch());
                 self.mem_write();
                 self.dec_sp();
             }
             M2 => {
                 self.set_addr(self.sp());
-                self.data = self.pcl();
+                self.set_data(self.pcl());
                 self.mem_write();
                 self.set_pc((self.ir() & M543) as u16);
             }
@@ -1856,15 +1853,15 @@ impl Cpu {
     pub fn pop_r16stk(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_sp();
             }
             M2 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_sp();
             }
             M1 => {
@@ -1882,20 +1879,20 @@ impl Cpu {
     pub fn push_r16stk(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 self.dec_sp();
             }
             M3 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 let r16stk = R16stk::from((self.ir() & M54) >> 4);
-                self.data = (self.r16stk(r16stk) >> 8) as u8;
+                self.set_data((self.r16stk(r16stk) >> 8) as u8);
                 self.mem_write();
                 self.dec_sp();
             }
             M2 => {
-                self.addr = self.sp();
+                self.set_addr(self.sp());
                 let r16stk = R16stk::from((self.ir() & M54) >> 4);
-                self.data = self.r16stk(r16stk) as u8;
+                self.set_data(self.r16stk(r16stk) as u8);
                 self.mem_write();
             }
             M1 => {
@@ -1924,8 +1921,8 @@ impl Cpu {
     pub fn ldh_mc_a(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = 0xFF00 + self.c() as u16;
-                self.data = self.a();
+                self.set_addr(0xFF00 + self.c() as u16);
+                self.set_data(self.a());
                 self.mem_write();
             }
             M1 => {
@@ -1941,14 +1938,14 @@ impl Cpu {
     pub fn ldh_mimm8_a(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = 0xFF00 + self.z() as u16;
-                self.data = self.a();
+                self.set_addr(0xFF00 + self.z() as u16);
+                self.set_data(self.a());
                 self.mem_write();
             }
             M1 => {
@@ -1964,20 +1961,20 @@ impl Cpu {
     pub fn ld_mimm16_a(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = self.wz();
-                self.data = self.a();
+                self.set_addr(self.wz());
+                self.set_data(self.a());
                 self.mem_write();
             }
             M1 => {
@@ -1993,9 +1990,9 @@ impl Cpu {
     pub fn ldh_a_mc(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = 0xFF00 + self.c() as u16;
+                self.set_addr(0xFF00 + self.c() as u16);
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
             }
             M1 => {
                 self.set_a(self.z());
@@ -2011,15 +2008,15 @@ impl Cpu {
     pub fn ldh_a_mimm8(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = 0xFF00 + self.z() as u16;
+                self.set_addr(0xFF00 + self.z() as u16);
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
             }
             M1 => {
                 self.set_a(self.z());
@@ -2035,21 +2032,21 @@ impl Cpu {
     pub fn ld_a_mimm16(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data);
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = 0xFF00 + self.z() as u16;
+                self.set_addr(0xFF00 + self.z() as u16);
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
             }
             M1 => {
                 self.set_a(self.z());
@@ -2065,13 +2062,13 @@ impl Cpu {
     pub fn add_sp_imm8(&mut self) {
         match self.mc {
             M4 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M3 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 let (r, c, h, _) = if self.z() & 0x80 != 0 {
                     self.spl().halfcarry_sub(!(self.z()) + 0x1)
                 } else {
@@ -2082,13 +2079,13 @@ impl Cpu {
                 self.set_carry(c);
 
                 self.set_z(r);
-                self.data = self.z();
+                self.set_data(self.z());
             }
             M2 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 let (r, _, _, _) = self.sph().halfcarry_add(self.carry());
                 self.set_w(r);
-                self.data = self.w();
+                self.set_data(self.w());
             }
             M1 => {
                 self.set_sp(self.wz());
@@ -2104,13 +2101,13 @@ impl Cpu {
     pub fn ld_hl_sp_plus_imm8(&mut self) {
         match self.mc {
             M3 => {
-                self.addr = self.pc();
+                self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.addr = 0x0000;
+                self.set_addr(0x0000);
                 let (r, c, h, _) = if self.z() & 0x80 != 0 {
                     self.spl().halfcarry_sub(!(self.z()) + 0x1)
                 } else {
@@ -2121,7 +2118,7 @@ impl Cpu {
                 self.set_carry(c);
 
                 self.set_l(r);
-                self.data = self.z();
+                self.set_data(self.z());
             }
             M1 => {
                 let (r, _, _, _) = self.sph().halfcarry_add(self.carry());
@@ -2138,7 +2135,7 @@ impl Cpu {
     pub fn ld_sp_hl(&mut self) {
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.set_sp(self.hl());
             }
             M1 => {
@@ -2181,17 +2178,17 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 self.set_carry((self.z() & 0x80) >> 7);
-                self.addr = self.hl();
-                self.data = self.z().rotate_left(1);
+                self.set_addr(self.hl());
+                self.set_data(self.z().rotate_left(1));
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2233,17 +2230,17 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 self.set_carry(self.z() & 0x01);
-                self.addr = self.hl();
-                self.data = self.z().rotate_right(1);
+                self.set_addr(self.hl());
+                self.set_data(self.z().rotate_right(1));
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2285,18 +2282,18 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 let c = self.carry();
                 self.set_carry((self.z() & 0x80) >> 7);
-                self.addr = self.hl();
-                self.data = (self.z() << 1) | c;
+                self.set_addr(self.hl());
+                self.set_data((self.z() << 1) | c);
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2339,18 +2336,18 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 let c = self.carry();
                 self.set_carry(self.z() & 0x1);
-                self.addr = self.hl();
-                self.data = (self.z() >> 1) | (c << 7);
+                self.set_addr(self.hl());
+                self.set_data((self.z() >> 1) | (c << 7));
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2393,17 +2390,17 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 self.set_carry((self.z() & 0x80) >> 7);
-                self.addr = self.hl();
-                self.data = self.z() << 1;
+                self.set_addr(self.hl());
+                self.set_data(self.z() << 1);
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2445,18 +2442,18 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 let hi = self.z() & 0x80;
                 self.set_carry(self.z() & 0x1);
-                self.addr = self.hl();
-                self.data = (self.z() >> 1) | hi;
+                self.set_addr(self.hl());
+                self.set_data((self.z() >> 1) | hi);
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2499,16 +2496,16 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
-                self.addr = self.hl();
-                self.data = self.z().rotate_right(4);
+                self.set_addr(self.hl());
+                self.set_data(self.z().rotate_right(4));
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2551,17 +2548,17 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M2 => {
                 self.set_carry(self.z() & 0x1);
-                self.addr = self.hl();
-                self.data = self.z() >> 1;
+                self.set_addr(self.hl());
+                self.set_data(self.z() >> 1);
                 self.mem_write();
 
-                if self.data == 0 {
+                if self.data() == 0 {
                     self.set_zero(1);
                 } else {
                     self.set_zero(0);
@@ -2603,9 +2600,9 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M2 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
             }
             M1 => {
                 if r8 == R8::HL {
@@ -2647,13 +2644,13 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
             }
             M2 => {
-                self.addr = self.hl();
-                self.data = self.z() & !self.mask_bit();
+                self.set_addr(self.hl());
+                self.set_data(self.z() & !self.mask_bit());
                 self.mem_write();
             }
             M1 => {
@@ -2681,13 +2678,13 @@ impl Cpu {
         let r8 = self.r8_operand();
         match self.mc {
             M3 => {
-                self.addr = self.hl();
+                self.set_addr(self.hl());
                 self.mem_read();
-                self.set_z(self.data);
+                self.set_z(self.data());
             }
             M2 => {
-                self.addr = self.hl();
-                self.data = self.z() | self.mask_bit();
+                self.set_addr(self.hl());
+                self.set_data(self.z() | self.mask_bit());
                 self.mem_write();
             }
             M1 => {
@@ -2713,65 +2710,64 @@ impl Cpu {
     // }}} end Execute Functions
 
     // {{{ Cycle Functions
-    pub fn tick_t1(&mut self) {
-        self.t += 1;
-        if self.t.is_multiple_of(4) {
-            self.m += 1;
-
-            if !self.halted {
-                self.execute();
-            }
-        }
-    }
-
-    pub fn tick4(&mut self) {
-        for _ in 0..4 {
-            self.tick_t1()
-        }
-    }
-
-    pub fn mtick(&mut self, mcycles: usize) {
-        for _ in 0..mcycles {
-            self.tick4();
+    pub fn tick(&mut self, t: u128) {
+        if t.is_multiple_of(4) && !self.halted {
+            self.execute();
         }
     }
     // }}}
 
     // {{{ Memory Functions
     pub fn mem_read(&mut self) {
-        self.data = self.mem[self.addr as usize];
+        self.with_mem_mut(|mem| {
+            mem.read();
+        });
     }
 
     pub fn mem_dbg_read(&self, addr: u16) -> u8 {
-        self.mem[addr as usize]
+        self.with_mem(|mem| mem.dbg_read(addr))
     }
 
     pub fn mem_write(&mut self) {
-        let addr = self.addr();
-        let data = self.data();
-        match addr {
-            0x0000..0x4000 => todo!("Memory write to ROM bank 00: {:04x}:{:02x}", addr, data),
-            0x4000..0x8000 => todo!("Memory write to ROM bank 01-NN: {:04x}:{:02x}", addr, data),
-            0x8000..0xA000 => self.mem[addr as usize] = data, // 8 KiB VRAM (GBC Bank 00-01)
-            0xA000..0xC000 => self.mem[addr as usize] = data, // 8 KiB External RAM
-            0xC000..0xD000 => self.mem[addr as usize] = data, // 4 KiB Work RAM
-            0xD000..0xE000 => self.mem[addr as usize] = data, // 4 KiB Work RAM (GBC Bank 01-07)
-            0xE000..0xFE00 => panic!("Memory write to echo RAM: {:04x}:{:02x}", addr, data),
-            0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
-            0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
-            0xFF00..0xFF80 => todo!("Memory write to I/O registers: {:04x}:{:02x}", addr, data),
-            0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
-            0xFFFF => todo!("Memory write to IE register: {:04x}:{:02x}", addr, data),
-        }
+        self.with_mem_mut(|mem| {
+            mem.write();
+        });
     }
 
     pub fn mem_dbg_write(&mut self, addr: u16, data: u8) {
-        self.mem[addr as usize] = data
+        self.with_mem_mut(|mem| mem.dbg_write(addr, data));
     }
 
-    pub fn mem_bulk_write(&mut self, addr: u16, mem: &[u8]) {
-        self.mem[addr as usize..mem.len()].copy_from_slice(mem);
+    pub fn mem_bulk_write(&mut self, addr: u16, data: &[u8]) {
+        self.with_mem_mut(|mem| mem.bulk_write(addr, data));
     }
+
+    pub fn addr(&self) -> u16 {
+        self.with_mem(|mem| mem.addr())
+    }
+
+    pub fn data(&self) -> u8 {
+        self.with_mem(|mem| mem.data())
+    }
+
+    pub fn set_addr(&mut self, addr: u16) {
+        self.with_mem_mut(|mem| mem.set_addr(addr));
+    }
+
+    pub fn set_data(&mut self, data: u8) {
+        self.with_mem_mut(|mem| mem.set_data(data));
+    }
+
+    fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
+        let mut mem = self.mem.borrow_mut();
+        f(&mut mem)
+    }
+
+    fn with_mem<R>(&self, f: impl FnOnce(&Memory) -> R) -> R {
+        let mem = self.mem.borrow();
+        f(&mem)
+    }
+
     // }}}
 
     // {{{ CPU Getters
@@ -2841,24 +2837,8 @@ impl Cpu {
         }
     }
 
-    pub fn m(&self) -> u128 {
-        self.m
-    }
-
-    pub fn t(&self) -> u128 {
-        self.t
-    }
-
     pub fn mc(&self) -> Mc {
         self.mc
-    }
-
-    pub fn addr(&self) -> u16 {
-        self.addr
-    }
-
-    pub fn data(&self) -> u8 {
-        self.data
     }
 
     pub fn ime(&self) -> u8 {
@@ -3045,24 +3025,8 @@ impl Cpu {
         }
     }
 
-    pub fn set_m(&mut self, m: u128) {
-        self.m = m
-    }
-
-    pub fn set_t(&mut self, t: u128) {
-        self.t = t
-    }
-
     pub fn set_mc(&mut self, mc: Mc) {
         self.mc = mc
-    }
-
-    pub fn set_addr(&mut self, addr: u16) {
-        self.addr = addr
-    }
-
-    pub fn set_data(&mut self, data: u8) {
-        self.data = data
     }
 
     pub fn set_ime(&mut self, ime: u8) {
@@ -3211,12 +3175,8 @@ impl std::default::Default for Cpu {
             wz: 0x0000,
         };
         Cpu {
-            mem: [0u8; 0xFFFF],
-            m: 0,
-            t: 0,
+            mem: Rc::new(RefCell::new(Memory::new(&[]))),
             r,
-            addr: 0x0000,
-            data: 0x0000,
             ime: 0,
             cb: 0,
             mc: Mc::M1,
@@ -3232,9 +3192,7 @@ impl std::fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "m: {}, t: {}, af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} ime: {} halted: {} cb: {}",
-            self.m(),
-            self.t(),
+            "af: {:04x} bc: {:04x} de: {:04x} hl: {:04x}\na: {:02x} b: {:02x} c: {:02x} d: {:02x} e: {:02x} h: {:02x} l: {:02x}\nsp: {:04x} pc: {:04x} f: {:02x} z: {} n: {} h: {} c: {}\nir: {:02x} wz: {:04x} mc: {:?} ime: {} halted: {} cb: {}",
             self.af(),
             self.bc(),
             self.de(),
