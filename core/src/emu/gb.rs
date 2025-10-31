@@ -3,6 +3,9 @@ use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
+
+const NORMAL_CLOCK: f64 = 1.0 / 4_194_304.0;
 
 #[allow(dead_code)]
 pub struct Gameboy {
@@ -51,12 +54,18 @@ impl Gameboy {
         }
     }
 
-    pub fn run(&self) {
-        let mut i: u8 = 0;
+    pub fn run(&mut self) {
+        let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
+        let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);
+        let mut animate = Instant::now() + Duration::from_secs_f64(0.5);
         loop {
-            self.ppu.testwrite(i);
-            i = (i + 1) % 4;
-            std::thread::sleep(std::time::Duration::from_secs_f64(0.01));
+            self.tick(1);
+            let target = Instant::now() + normal_cycle;
+            while Instant::now() < target {}
+            if Instant::now() > animate {
+                self.ppu.testing = self.ppu.testing.wrapping_add(1);
+                animate = Instant::now() + Duration::from_secs_f64(1.0 / 30.0);
+            }
         }
     }
 }

@@ -186,21 +186,7 @@ impl ApplicationHandler for WindowApp {
                 }
             }
             WindowEvent::RedrawRequested => {
-                let mut pixels_guard = match self.pixels.lock() {
-                    Ok(guard) => guard,
-                    Err(err) => {
-                        eprintln!("failed to acquire pixels handle: {err}");
-                        event_loop.exit();
-                        return;
-                    }
-                };
-
-                if let Some(pixels) = pixels_guard.as_mut()
-                    && let Err(err) = pixels.render()
-                {
-                    eprintln!("failed to render frame: {err}");
-                    event_loop.exit();
-                }
+                // Redraw requests driven by PPU
             }
             _ => {}
         }

@@ -37,7 +37,7 @@ fn main() {
 
     let gameboy_pixels = shared_pixels.clone();
     let gameboy_thread = thread::spawn(move || {
-        let gameboy = Gameboy::dmg(ROM, gameboy_pixels);
+        let mut gameboy = Gameboy::dmg(ROM, gameboy_pixels);
         gameboy.run();
     });
 
