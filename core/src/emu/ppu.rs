@@ -17,7 +17,6 @@ pub struct Ppu {
     bg_fifo: Vec<Pixel>,
     obj_fifo: Vec<Pixel>,
     x: u8,
-    y: u8,
     pub testing: usize,
     back_buffer: Vec<u8>,
 }
@@ -38,7 +37,6 @@ impl Ppu {
             bg_fifo: Vec::<Pixel>::new(),
             obj_fifo: Vec::<Pixel>::new(),
             x: 0,
-            y: 0,
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
         }
@@ -51,7 +49,6 @@ impl Ppu {
             bg_fifo: Vec::<Pixel>::new(),
             obj_fifo: Vec::<Pixel>::new(),
             x: 0,
-            y: 0,
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
         }
@@ -69,6 +66,85 @@ impl Ppu {
         };
         self.bg_fifo.push(pixel);
         self.render();
+        self.update_stat();
+    }
+
+    fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
+        let mut mem = self.mem.borrow_mut();
+        f(&mut mem)
+    }
+
+    fn with_mem<R>(&self, f: impl FnOnce(&Memory) -> R) -> R {
+        let mem = self.mem.borrow();
+        f(&mem)
+    }
+
+    pub fn mem_read(&mut self) {
+        self.with_mem_mut(|mem| {
+            mem.read();
+        });
+    }
+
+    pub fn mem_dbg_read(&self, addr: u16) -> u8 {
+        self.with_mem(|mem| mem.dbg_read(addr))
+    }
+
+    pub fn mem_write(&mut self) {
+        self.with_mem_mut(|mem| {
+            mem.write();
+        });
+    }
+
+    pub fn mem_dbg_write(&mut self, addr: u16, data: u8) {
+        self.with_mem_mut(|mem| mem.dbg_write(addr, data));
+    }
+
+    pub fn set_mode(&mut self, mode: u8) {
+        self.mem_dbg_write(0xFF41, (self.mode() & 0xFC) & (mode & 0x3))
+    }
+
+    pub fn mode(&self) -> u8 {
+        self.mem_dbg_read(0xFF41 & 0x3)
+    }
+
+    pub fn ly(&self) -> u8 {
+        self.mem_dbg_read(0xFF44)
+    }
+
+    pub fn set_ly(&mut self, ly: u8) {
+        self.mem_dbg_write(0xFF44, ly)
+    }
+
+    pub fn lyc(&self) -> u8 {
+        self.mem_dbg_read(0xFF45)
+    }
+
+    pub fn set_lyc(&mut self, lyc: u8) {
+        self.mem_dbg_write(0xFF45, lyc)
+    }
+
+    pub fn stat(&self) -> u8 {
+        self.mem_dbg_read(0xFF41)
+    }
+
+    pub fn set_stat_bit(&mut self, lyc: u8) {
+        let mut stat = self.mem_dbg_read(0xFF41);
+        stat &= 0x1 << lyc;
+        self.mem_dbg_write(0xFF41, stat)
+    }
+
+    pub fn clear_stat_bit(&mut self, lyc: u8) {
+        let mut stat = self.mem_dbg_read(0xFF41);
+        stat &= !(0x1 << lyc);
+        self.mem_dbg_write(0xFF41, stat)
+    }
+
+    pub fn update_stat(&mut self) {
+        if self.ly() == self.lyc() {
+            self.set_stat_bit(2);
+        } else {
+            self.clear_stat_bit(2);
+        }
     }
 
     pub fn render(&mut self) {
@@ -77,7 +153,7 @@ impl Ppu {
             None => return,
         };
 
-        let index = self.x as usize + self.y as usize * SCREEN_WIDTH as usize;
+        let index = self.x as usize + self.ly() as usize * SCREEN_WIDTH as usize;
         if let Some(target) = self.back_buffer.get_mut((index * 4)..((index + 1) * 4)) {
             target.copy_from_slice(&Ppu::get_color(pixel.color));
         }
@@ -86,9 +162,9 @@ impl Ppu {
         self.x += 1;
         if self.x == SCREEN_WIDTH as u8 {
             self.x = 0;
-            self.y += 1;
-            if self.y == SCREEN_HEIGHT as u8 {
-                self.y = 0;
+            self.set_ly(self.ly() + 1);
+            if self.ly() == SCREEN_HEIGHT as u8 {
+                self.set_ly(0);
                 frame_complete = true;
             }
         }
