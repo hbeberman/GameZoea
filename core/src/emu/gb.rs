@@ -36,12 +36,12 @@ impl Gameboy {
         }
     }
 
-    pub fn dmg(rom: &[u8], pixels: SharedPixels) -> Self {
+    pub fn dmg(rom: &[u8], frame_tx: FrameSender) -> Self {
         let mem = Rc::new(RefCell::new(Memory::new(rom)));
         Gameboy {
             t: 0,
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
-            ppu: Ppu::init_dmg(pixels, mem.clone()),
+            ppu: Ppu::init_dmg(frame_tx, mem.clone()),
             mem,
         }
     }

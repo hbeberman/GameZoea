@@ -24,20 +24,19 @@ fn main() {
   inc a
     "#};
 
-    let shared_pixels = window::create_pixels_handle();
-
-    let window_pixels = shared_pixels.clone();
+    let (frame_tx, frame_rx) = window::create_frame_channel();
+    let window_frame_rx = frame_rx;
 
     let window_thread = thread::spawn(move || {
-        if let Err(err) = window::run(scale, window_pixels) {
+        if let Err(err) = window::run(scale, window_frame_rx) {
             eprintln!("Window error: {err}");
         }
     });
     threads.push(window_thread);
 
-    let gameboy_pixels = shared_pixels.clone();
+    let gameboy_frame_tx = frame_tx.clone();
     let gameboy_thread = thread::spawn(move || {
-        let mut gameboy = Gameboy::dmg(ROM, gameboy_pixels);
+        let mut gameboy = Gameboy::dmg(ROM, gameboy_frame_tx);
         gameboy.run();
     });
 

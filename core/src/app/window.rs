@@ -1,8 +1,10 @@
 pub use crate::emu::cpu::*;
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{Pixels, PixelsBuilder, SurfaceTexture, wgpu::PresentMode};
 use std::{
+    collections::VecDeque,
     process,
-    sync::{Arc, Mutex},
+    sync::{Arc, mpsc::SyncSender},
+    thread,
 };
 
 use winit::{
@@ -10,7 +12,7 @@ use winit::{
     dpi::PhysicalSize,
     error::EventLoopError,
     event::{ElementState, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
@@ -19,14 +21,19 @@ pub const SCREEN_WIDTH: u32 = 160;
 pub const SCREEN_HEIGHT: u32 = 144;
 pub const MAX_SCALE: u32 = 5;
 
-pub type SharedPixels = Arc<Mutex<Option<Pixels<'static>>>>;
+pub type FrameSender = SyncSender<Vec<u8>>;
 
-pub fn create_pixels_handle() -> SharedPixels {
-    Arc::new(Mutex::new(None))
+#[derive(Debug)]
+pub enum WindowMessage {
+    Frame(Vec<u8>),
 }
 
-pub fn run(scale: u32, pixels: SharedPixels) -> Result<(), EventLoopError> {
-    let mut event_loop_builder = EventLoop::builder();
+pub fn create_frame_channel() -> (FrameSender, std::sync::mpsc::Receiver<Vec<u8>>) {
+    std::sync::mpsc::sync_channel(2)
+}
+
+pub fn run(scale: u32, frame_rx: std::sync::mpsc::Receiver<Vec<u8>>) -> Result<(), EventLoopError> {
+    let mut event_loop_builder = EventLoop::<WindowMessage>::with_user_event();
 
     #[cfg(all(target_os = "linux", feature = "wayland"))]
     {
@@ -41,18 +48,29 @@ pub fn run(scale: u32, pixels: SharedPixels) -> Result<(), EventLoopError> {
     }
 
     let event_loop = event_loop_builder.build()?;
-    let mut app = WindowApp::new(scale, pixels);
+    let proxy = event_loop.create_proxy();
+
+    let _notifier = thread::spawn(move || {
+        while let Ok(frame) = frame_rx.recv() {
+            if proxy.send_event(WindowMessage::Frame(frame)).is_err() {
+                break;
+            }
+        }
+    });
+
+    let mut app = WindowApp::new(scale);
     event_loop.run_app(&mut app)
 }
 
 struct WindowApp {
     scale: u32,
     window: Option<Arc<Window>>,
-    pixels: SharedPixels,
+    pixels: Option<Pixels<'static>>,
+    frame_queue: VecDeque<Vec<u8>>,
 }
 
 impl WindowApp {
-    fn new(scale: u32, pixels: SharedPixels) -> Self {
+    fn new(scale: u32) -> Self {
         let safe_scale = scale.clamp(1, MAX_SCALE);
 
         debug_assert_eq!(
@@ -63,7 +81,8 @@ impl WindowApp {
         Self {
             scale: safe_scale,
             window: None,
-            pixels,
+            pixels: None,
+            frame_queue: VecDeque::new(),
         }
     }
 
@@ -72,7 +91,7 @@ impl WindowApp {
     }
 }
 
-impl ApplicationHandler for WindowApp {
+impl ApplicationHandler<WindowMessage> for WindowApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
@@ -102,7 +121,10 @@ impl ApplicationHandler for WindowApp {
         let surface_texture =
             SurfaceTexture::new(target_size.width, target_size.height, window.clone());
 
-        let pixels = match Pixels::new(SCREEN_WIDTH, SCREEN_HEIGHT, surface_texture) {
+        let pixels = match PixelsBuilder::new(SCREEN_WIDTH, SCREEN_HEIGHT, surface_texture)
+            .present_mode(PresentMode::Fifo)
+            .build()
+        {
             Ok(pixels) => pixels,
             Err(err) => {
                 eprintln!("failed to create pixel surface: {err}");
@@ -113,16 +135,7 @@ impl ApplicationHandler for WindowApp {
 
         window.request_redraw();
 
-        let mut shared_pixels = match self.pixels.lock() {
-            Ok(guard) => guard,
-            Err(err) => {
-                eprintln!("failed to acquire pixels handle: {err}");
-                event_loop.exit();
-                return;
-            }
-        };
-
-        *shared_pixels = Some(pixels);
+        self.pixels = Some(pixels);
         self.window = Some(window);
     }
 
@@ -132,13 +145,10 @@ impl ApplicationHandler for WindowApp {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let Some(window) = self.window.as_ref() else {
-            return;
+        let window_arc = match self.window.as_ref() {
+            Some(window) if window.id() == window_id => Arc::clone(window),
+            _ => return,
         };
-
-        if window.id() != window_id {
-            return;
-        }
 
         match event {
             WindowEvent::CloseRequested => {
@@ -158,6 +168,7 @@ impl ApplicationHandler for WindowApp {
                 }
             }
             WindowEvent::Resized(size) => {
+                let window = &window_arc;
                 if size.width == 0 || size.height == 0 {
                     return;
                 }
@@ -169,16 +180,7 @@ impl ApplicationHandler for WindowApp {
                     return;
                 }
 
-                let mut pixels_guard = match self.pixels.lock() {
-                    Ok(guard) => guard,
-                    Err(err) => {
-                        eprintln!("failed to acquire pixels handle: {err}");
-                        event_loop.exit();
-                        return;
-                    }
-                };
-
-                if let Some(pixels) = pixels_guard.as_mut()
+                if let Some(pixels) = self.pixels.as_mut()
                     && let Err(err) = pixels.resize_surface(size.width, size.height)
                 {
                     eprintln!("failed to resize surface: {err}");
@@ -186,15 +188,61 @@ impl ApplicationHandler for WindowApp {
                 }
             }
             WindowEvent::RedrawRequested => {
-                // Redraw requests driven by PPU
+                let Some(pixels) = self.pixels.as_mut() else {
+                    return;
+                };
+
+                let Some(frame) = self.frame_queue.pop_front() else {
+                    return;
+                };
+
+                if pixels.frame().len() != frame.len() {
+                    eprintln!(
+                        "frame size mismatch: window={} incoming={}",
+                        pixels.frame().len(),
+                        frame.len()
+                    );
+                    return;
+                }
+
+                pixels.frame_mut().copy_from_slice(&frame);
+
+                if let Err(err) = pixels.render() {
+                    eprintln!("failed to render frame: {err}");
+                }
+
+                if let Some(window) = self.window.as_ref()
+                    && !self.frame_queue.is_empty()
+                {
+                    window.request_redraw();
+                }
             }
             _ => {}
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(window) = self.window.as_ref() {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: WindowMessage) {
+        match event {
+            WindowMessage::Frame(frame) => {
+                self.frame_queue.push_back(frame);
+                if let Some(window) = self.window.as_ref() {
+                    window.request_redraw();
+                }
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_none() {
+            return;
+        }
+
+        if !self.frame_queue.is_empty()
+            && let Some(window) = self.window.as_ref()
+        {
             window.request_redraw();
         }
+
+        event_loop.set_control_flow(ControlFlow::Wait);
     }
 }

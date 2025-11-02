@@ -1,4 +1,4 @@
-use crate::app::window::SharedPixels;
+use crate::app::window::{FrameSender, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emu::mem::Memory;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,17 +8,21 @@ pub const DARK_GREY: [u8; 4] = [0x39, 0x59, 0x4A, 0xFF];
 pub const LIGHT_GREY: [u8; 4] = [0x5A, 0x79, 0x42, 0xFF];
 pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
+const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
+
 #[allow(dead_code)]
 pub struct Ppu {
-    pixels: Option<SharedPixels>,
+    frame_tx: Option<FrameSender>,
     mem: Rc<RefCell<Memory>>,
     bg_fifo: Vec<Pixel>,
     obj_fifo: Vec<Pixel>,
     x: u8,
     y: u8,
     pub testing: usize,
+    back_buffer: Vec<u8>,
 }
 
+#[allow(dead_code)]
 pub struct Pixel {
     color: u8, // 0..=3
     palette: u8,
@@ -29,25 +33,27 @@ pub struct Pixel {
 impl Ppu {
     pub fn headless_dmg(mem: Rc<RefCell<Memory>>) -> Self {
         Ppu {
-            pixels: None,
+            frame_tx: None,
             mem,
             bg_fifo: Vec::<Pixel>::new(),
             obj_fifo: Vec::<Pixel>::new(),
             x: 0,
             y: 0,
             testing: 0,
+            back_buffer: vec![0; FRAME_BYTES],
         }
     }
 
-    pub fn init_dmg(pixels: SharedPixels, mem: Rc<RefCell<Memory>>) -> Self {
+    pub fn init_dmg(frame_tx: FrameSender, mem: Rc<RefCell<Memory>>) -> Self {
         Ppu {
-            pixels: Some(pixels),
+            frame_tx: Some(frame_tx),
             mem,
             bg_fifo: Vec::<Pixel>::new(),
             obj_fifo: Vec::<Pixel>::new(),
             x: 0,
             y: 0,
             testing: 0,
+            back_buffer: vec![0; FRAME_BYTES],
         }
     }
 
@@ -71,32 +77,32 @@ impl Ppu {
             None => return,
         };
 
-        let pixels = match &self.pixels {
-            Some(pixels) => pixels,
-            None => return,
-        };
-        let Ok(mut guard) = pixels.lock() else {
-            eprintln!("failed to lock shared pixels");
-            return;
-        };
-
-        let Some(pixels) = guard.as_mut() else {
-            return;
-        };
-
-        let index = self.x as usize + self.y as usize * 160;
-        if let Some(target) = pixels.frame_mut().get_mut((index * 4)..((index + 1) * 4)) {
+        let index = self.x as usize + self.y as usize * SCREEN_WIDTH as usize;
+        if let Some(target) = self.back_buffer.get_mut((index * 4)..((index + 1) * 4)) {
             target.copy_from_slice(&Ppu::get_color(pixel.color));
         }
 
+        let mut frame_complete = false;
         self.x += 1;
-        if self.x == 160 {
+        if self.x == SCREEN_WIDTH as u8 {
             self.x = 0;
             self.y += 1;
-            if self.y == 144 {
+            if self.y == SCREEN_HEIGHT as u8 {
                 self.y = 0;
-                _ = pixels.render();
+                frame_complete = true;
             }
+        }
+
+        if !frame_complete {
+            return;
+        }
+
+        let Some(frame_tx) = &self.frame_tx else {
+            return;
+        };
+
+        if let Err(err) = frame_tx.send(self.back_buffer.clone()) {
+            eprintln!("failed to deliver frame: {err}");
         }
     }
 
