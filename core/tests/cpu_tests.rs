@@ -161,12 +161,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to I/O registers: ff00:ab")]
     fn mem_write_io() {
         let mut gb = Gameboy::cartless_dmg();
-        gb.cpu.set_addr(0xFF00);
-        gb.cpu.set_data(0xAB);
+        gb.cpu.set_addr(0xFF0F);
+        gb.cpu.set_data(0x1F);
         gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFF0F), 0x1F);
     }
 
     #[test]
@@ -179,12 +179,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to IE register: ffff:ab")]
     fn mem_write_ie() {
         let mut gb = Gameboy::cartless_dmg();
         gb.cpu.set_addr(0xFFFF);
-        gb.cpu.set_data(0xAB);
+        gb.cpu.set_data(0x1F);
         gb.cpu.mem_write();
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFF), 0x1F);
     }
     // }}}
 
@@ -1561,6 +1561,162 @@ SkipIncA:
         gb.tick(4 * 200);
         assert_hex_eq!(gb.cpu.c(), 0x01);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x80);
+    }
+    // }}}
+
+    // {{{ interrupt tests
+    #[test]
+    fn interrupt_vsync() {
+        const ROM: &[u8] = gbasm! {r#"
+  ei
+  ld a, 0x01
+  ld [0xFF0F], a
+  ld [0xFFFF], a
+  inc b
+  halt
+
+SECTION "VBlankInterrupt", ROM0[$40]
+VBlankHandler:
+  inc a
+  ld [0xFFFF], a
+  reti
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x02);
+        assert_hex_eq!(gb.cpu.bc(), 0x0113);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
+    }
+
+    #[test]
+    fn interrupt_stat() {
+        const ROM: &[u8] = gbasm! {r#"
+  ei
+  ld a, 0x02
+  ld [0xFF0F], a
+  ld [0xFFFF], a
+  inc b
+  di
+  halt
+
+SECTION "StatInterrupt", ROM0[$48]
+StatHandler:
+  inc a
+  ld [0xFFFF], a
+  reti
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x03);
+        assert_hex_eq!(gb.cpu.bc(), 0x0113);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
+    }
+
+    #[test]
+    fn interrupt_timer() {
+        const ROM: &[u8] = gbasm! {r#"
+  ei
+  ld a, 0x04
+  ld [0xFF0F], a
+  ld [0xFFFF], a
+  inc b
+  di
+  halt
+
+SECTION "TimerInterrupt", ROM0[$50]
+TimerHandler:
+  inc a
+  ld [0xFFFF], a
+  reti
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x05);
+        assert_hex_eq!(gb.cpu.bc(), 0x0113);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
+    }
+
+    #[test]
+    fn interrupt_serial() {
+        const ROM: &[u8] = gbasm! {r#"
+  ei
+  ld a, 0x08
+  ld [0xFF0F], a
+  ld [0xFFFF], a
+  inc b
+  di
+  halt
+
+SECTION "SerialInterrupt", ROM0[$58]
+SerialHandler:
+  inc a
+  ld [0xFFFF], a
+  reti
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x09);
+        assert_hex_eq!(gb.cpu.bc(), 0x0113);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
+    }
+
+    #[test]
+    fn interrupt_joypad() {
+        const ROM: &[u8] = gbasm! {r#"
+  ei
+  ld a, 0x10
+  ld [0xFF0F], a
+  ld [0xFFFF], a
+  inc b
+  di
+  halt
+
+SECTION "JoypadInterrupt", ROM0[$60]
+JoypadHandler:
+  inc a
+  ld [0xFFFF], a
+  reti
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x11);
+        assert_hex_eq!(gb.cpu.bc(), 0x0113);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
+    }
+    // }}}
+
+    #[test]
+    fn interrupt_hybrid() {
+        const ROM: &[u8] = gbasm! {r#"
+  ei
+  ld a, 0x11
+  ld [0xFF0F], a
+  ld [0xFFFF], a
+  inc b
+  di
+  halt
+
+SECTION "JoypadInterrupt", ROM0[$60]
+JoypadHandler:
+  add a, c
+  reti
+
+SECTION "VBlankInterrupt", ROM0[$40]
+VBlankHandler:
+  inc c
+  reti
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x25);
+        assert_hex_eq!(gb.cpu.bc(), 0x0114);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
     }
     // }}}
 

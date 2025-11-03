@@ -1,5 +1,5 @@
 pub struct Memory {
-    mem: [u8; 0xFFFF],
+    mem: [u8; 0x10000],
     data: u8,
     addr: u16,
 }
@@ -7,14 +7,14 @@ pub struct Memory {
 impl Memory {
     pub fn empty() -> Self {
         Memory {
-            mem: [0u8; 0xFFFF],
+            mem: [0u8; 0x10000],
             data: 0x00,
             addr: 0x0000,
         }
     }
 
     pub fn new(cartridge: &[u8]) -> Self {
-        let mut mem = [0u8; 0xFFFF];
+        let mut mem = [0u8; 0x10000];
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
         Memory {
             mem,
@@ -44,9 +44,9 @@ impl Memory {
             0xE000..0xFE00 => panic!("Memory write to echo RAM: {:04x}:{:02x}", addr, data),
             0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
-            0xFF00..0xFF80 => todo!("Memory write to I/O registers: {:04x}:{:02x}", addr, data),
+            0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
-            0xFFFF => todo!("Memory write to IE register: {:04x}:{:02x}", addr, data),
+            0xFFFF => self.mem[addr as usize] = data,         // Interrupt Enable
         }
     }
 

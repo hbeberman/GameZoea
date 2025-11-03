@@ -366,6 +366,37 @@ impl Cpu {
         self.inc_pc();
     }
 
+    pub fn handle_interrupts(&mut self) {
+        let reg_ie = self.mem_dbg_read(0xFFFF);
+        let reg_if = self.mem_dbg_read(0xFF0F);
+        let hit = reg_ie & reg_if;
+        if self.ime == 1 && hit != 0x00 {
+            self.set_ime(0x00);
+            self.mc = M0;
+            self.executing = if hit & 0x01 != 0 {
+                self.mem_dbg_write(0xFF0F, reg_if & !0x01);
+                Cpu::int_vblank
+            } else if hit & 0x02 != 0 {
+                self.mem_dbg_write(0xFF0F, reg_if & !0x02);
+                Cpu::int_stat
+            } else if hit & 0x04 != 0 {
+                self.mem_dbg_write(0xFF0F, reg_if & !0x04);
+                Cpu::int_timer
+            } else if hit & 0x08 != 0 {
+                self.mem_dbg_write(0xFF0F, reg_if & !0x08);
+                Cpu::int_serial
+            } else if hit & 0x10 != 0 {
+                self.mem_dbg_write(0xFF0F, reg_if & !0x10);
+                Cpu::int_joypad
+            } else {
+                panic!("Invalid value in interrupt registers");
+            };
+            (self.executing)(self);
+            self.mc = self.mc.next();
+            self.decode();
+        }
+    }
+
     pub fn mask_bit(&self) -> u8 {
         1 << ((self.ir() & M543) >> 3)
     }
@@ -2165,7 +2196,7 @@ impl Cpu {
         match self.mc {
             M1 => {
                 self.fetch_next();
-                self.set_ime(1);
+                self.set_ime(2); // Set ime to 2 to emulate 1 M-cycle ei delay
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -2709,10 +2740,66 @@ impl Cpu {
 
     // }}} end Execute Functions
 
+    // {{{ Interrupt Functions
+    pub fn int_common(&mut self, addr: u16) {
+        eprintln!("addr: {:02x}", addr);
+        match self.mc {
+            M5 => {} // Pad to 5 M-cycles
+            M4 => self.dec_sp(),
+            M3 => {
+                self.set_addr(self.sp());
+                self.set_data(self.pch());
+                self.mem_write();
+                self.dec_sp();
+            }
+            M2 => {
+                self.set_addr(self.sp());
+                self.set_data(self.pcl());
+                self.mem_write();
+                eprintln!("pc before: {:02x}", self.pc());
+                self.set_pc(addr);
+                eprintln!("pc after: {:02x}", self.pc());
+            }
+            M1 => {
+                self.fetch_next();
+            }
+            M0 => {
+                self.set_ime(0);
+                self.set_mc(M6);
+            }
+            _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
+        }
+    }
+
+    pub fn int_vblank(&mut self) {
+        self.int_common(0x0040);
+    }
+
+    pub fn int_stat(&mut self) {
+        self.int_common(0x0048);
+    }
+
+    pub fn int_timer(&mut self) {
+        self.int_common(0x0050);
+    }
+
+    pub fn int_serial(&mut self) {
+        self.int_common(0x0058);
+    }
+
+    pub fn int_joypad(&mut self) {
+        self.int_common(0x0060);
+    }
+    // }}}
+
     // {{{ Cycle Functions
     pub fn tick(&mut self, t: u128) {
         if t.is_multiple_of(4) && !self.halted {
             self.execute();
+            self.handle_interrupts();
+            if self.ime() == 0x2 {
+                self.set_ime(0x1);
+            }
         }
     }
     // }}}
