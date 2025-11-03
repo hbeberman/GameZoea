@@ -1,6 +1,7 @@
 use crate::app::window::*;
 use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
+use crate::emu::timer::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -12,6 +13,7 @@ pub struct Gameboy {
     pub t: u128,
     pub cpu: Cpu,
     pub ppu: Ppu,
+    pub timer: Timer,
     mem: Rc<RefCell<Memory>>,
 }
 
@@ -22,6 +24,7 @@ impl Gameboy {
             t: 0,
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
             ppu: Ppu::headless_dmg(mem.clone()),
+            timer: Timer::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -32,6 +35,7 @@ impl Gameboy {
             t: 0,
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
             ppu: Ppu::headless_dmg(mem.clone()),
+            timer: Timer::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -42,6 +46,7 @@ impl Gameboy {
             t: 0,
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
             ppu: Ppu::init_dmg(frame_tx, mem.clone()),
+            timer: Timer::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -50,6 +55,7 @@ impl Gameboy {
         for _ in 0..count {
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);
+            self.timer.tick(self.t);
             self.t += 1;
         }
     }

@@ -44,9 +44,10 @@ impl Memory {
             0xE000..0xFE00 => panic!("Memory write to echo RAM: {:04x}:{:02x}", addr, data),
             0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
+            0xFF04 => self.mem[0xFF04] = 0x00, // Writes to DIV register set it to 0x00
             0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
-            0xFFFF => self.mem[addr as usize] = data,         // Interrupt Enable
+            0xFFFF => self.mem[addr as usize] = data, // Interrupt Enable
         }
     }
 
