@@ -2,6 +2,7 @@ pub struct Memory {
     mem: [u8; 0x10000],
     data: u8,
     addr: u16,
+    write_div: bool,
 }
 
 impl Memory {
@@ -10,6 +11,7 @@ impl Memory {
             mem: [0u8; 0x10000],
             data: 0x00,
             addr: 0x0000,
+            write_div: false,
         }
     }
 
@@ -20,6 +22,7 @@ impl Memory {
             mem,
             data: 0x00,
             addr: 0x0000,
+            write_div: false,
         }
     }
 
@@ -44,7 +47,7 @@ impl Memory {
             0xE000..0xFE00 => panic!("Memory write to echo RAM: {:04x}:{:02x}", addr, data),
             0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
-            0xFF04 => self.mem[0xFF04] = 0x00, // Writes to DIV register set it to 0x00
+            0xFF04 => self.write_div = true, // Clear the div register during timer tick
             0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
             0xFFFF => self.mem[addr as usize] = data, // Interrupt Enable
@@ -73,5 +76,11 @@ impl Memory {
 
     pub fn set_data(&mut self, data: u8) {
         self.data = data
+    }
+
+    pub fn check_write_div(&mut self) -> bool {
+        let result = self.write_div;
+        self.write_div = false;
+        result
     }
 }

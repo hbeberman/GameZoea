@@ -229,6 +229,22 @@ impl Cpu {
                 0xC0..=0xFF => Cpu::set_b3_r8,
             }
         } else {
+            println!(
+                "A:{:02X} F:{:02X} B:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",
+                self.a(),
+                self.f(),
+                self.b(),
+                self.c(),
+                self.d(),
+                self.e(),
+                self.l(),
+                self.sp(),
+                self.pc(),
+                self.mem_dbg_read(self.pc()),
+                self.mem_dbg_read(self.pc() + 1),
+                self.mem_dbg_read(self.pc() + 2),
+                self.mem_dbg_read(self.pc() + 3),
+            );
             match self.ir() {
                 // Block 0
                 0x00 => Cpu::nop,
@@ -334,14 +350,14 @@ impl Cpu {
     }
 
     pub fn execute(&mut self) {
-        if self.pc() >= 0x150 {
-            eprintln!("Execute Invoked!\n{}", self);
-        }
+        //  if self.pc() >= 0x150 {
+        //      eprintln!("Execute Invoked!\n{}", self);
+        //  }
         (self.executing)(self);
         self.mc = self.mc.next();
-        if self.pc() >= 0x150 {
-            eprintln!("Execute Resolved!\n{}", self);
-        }
+        //  if self.pc() >= 0x150 {
+        //      eprintln!("Execute Resolved!\n{}", self);
+        //  }
     }
 
     pub fn fetch_next(&mut self) {
@@ -557,7 +573,6 @@ impl Cpu {
                 let r16 = R16::from((self.ir() & M54) >> 4);
 
                 let result = self.r16(r16).wrapping_add(1);
-                eprintln!("Incrementing {:?} to {:04x}", r16, result);
 
                 self.set_r16(r16, result);
                 self.fetch_next()
@@ -578,7 +593,6 @@ impl Cpu {
                 let r16 = R16::from((self.ir() & M54) >> 4);
 
                 let result = self.r16(r16).wrapping_sub(1);
-                eprintln!("Decrementing {:?} to {:04x}", r16, result);
 
                 self.set_r16(r16, result);
                 self.fetch_next()
@@ -596,12 +610,6 @@ impl Cpu {
                 self.set_addr(0x0000);
                 let r16 = R16::from((self.ir() & M54) >> 4);
                 let (r, c, h, _) = self.l().halfcarry_add(self.lo(r16));
-                eprintln!(
-                    "Adding {:?} lo ({:02x}) to HL => {:02x}",
-                    r16,
-                    self.lo(r16),
-                    r
-                );
 
                 self.set_bcdn(0);
                 self.set_bcdh(h);
@@ -614,12 +622,6 @@ impl Cpu {
 
                 let (r1, c1, h1, _) = self.h().halfcarry_add(self.hi(r16));
                 let (r, c2, h2, _) = r1.halfcarry_add(self.carry());
-                eprintln!(
-                    "Adding {:?} hi ({:02x}) to HL => {:02x}",
-                    r16,
-                    self.hi(r16),
-                    r
-                );
 
                 self.set_bcdn(0);
                 if c1 + c2 > 0 {
@@ -649,8 +651,6 @@ impl Cpu {
                 let r8 = R8::from((self.ir() & M543) >> 3);
                 let (result, _, h, z) = self.r8(r8).halfcarry_add(1);
 
-                eprintln!("Incrementing {:?} to {:02x}", r8, result);
-
                 self.set_zero(z);
                 self.set_bcdn(0);
                 self.set_bcdh(h);
@@ -675,8 +675,6 @@ impl Cpu {
             M2 => {
                 let (result, _, h, z) = self.z().halfcarry_add(1);
 
-                eprintln!("Incrementing [{:?}] to {:02x}", self.hl(), result);
-
                 self.set_zero(z);
                 self.set_bcdn(0);
                 self.set_bcdh(h);
@@ -696,7 +694,6 @@ impl Cpu {
         match self.mc {
             M1 => {
                 let r8 = R8::from((self.ir() & M543) >> 3);
-                eprintln!("dec_r8 r8:{:?}", r8);
 
                 let (result, _, h, z) = self.r8(r8).halfcarry_sub(1);
 
@@ -723,8 +720,6 @@ impl Cpu {
             }
             M2 => {
                 let (result, _, h, z) = self.z().halfcarry_sub(1);
-
-                eprintln!("Decrementing [{:?}] to {:02x}", self.hl(), result);
 
                 self.set_zero(z);
                 self.set_bcdn(1);
@@ -2742,7 +2737,6 @@ impl Cpu {
 
     // {{{ Interrupt Functions
     pub fn int_common(&mut self, addr: u16) {
-        eprintln!("addr: {:02x}", addr);
         match self.mc {
             M5 => {} // Pad to 5 M-cycles
             M4 => self.dec_sp(),
@@ -2756,9 +2750,7 @@ impl Cpu {
                 self.set_addr(self.sp());
                 self.set_data(self.pcl());
                 self.mem_write();
-                eprintln!("pc before: {:02x}", self.pc());
                 self.set_pc(addr);
-                eprintln!("pc after: {:02x}", self.pc());
             }
             M1 => {
                 self.fetch_next();
@@ -2975,7 +2967,6 @@ impl Cpu {
             Cond::NC => self.carry() == 0,
             Cond::C => self.carry() == 1,
         };
-        eprintln!("COND IS {}", res);
         res
     }
 
@@ -3054,7 +3045,6 @@ impl Cpu {
 
     // {{{ CPU Setters
     pub fn set_r8(&mut self, r8: R8, data: u8) {
-        eprintln!("Setting {:?} to {:02x}", r8, data);
         match r8 {
             R8::B => self.set_b(data),
             R8::C => self.set_c(data),

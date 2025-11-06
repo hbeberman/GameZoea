@@ -2,22 +2,67 @@ use crate::emu::mem::Memory;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+const DIV: u16 = 0xFF04;
+const TIMA: u16 = 0xFF05;
+const TMA: u16 = 0xFF06;
+const TAC: u16 = 0xFF07;
+const IF: u16 = 0xFF0F;
+
 pub struct Timer {
     mem: Rc<RefCell<Memory>>,
+    system_counter: u16,
+    internal_tma: u8,
 }
 
 impl Timer {
     pub fn init_dmg(mem: Rc<RefCell<Memory>>) -> Self {
-        Timer { mem }
+        Timer {
+            mem,
+            system_counter: 0,
+            internal_tma: 0,
+        }
     }
 
     pub fn tick(&mut self, t: u128) {
-        if t.is_multiple_of(256) {
-            let div = self.mem_dbg_read(0xFF04);
-            let (result, _ ) = div.overflowing_add(1);
-            // TODO: Increment TIMA and fire interrupts in response
-            self.mem_dbg_write(0xFF04, result);
+        if self.check_write_div() {
+            self.system_counter = 0;
         }
+
+        if t.is_multiple_of(4) {
+            let (result, _) = self.system_counter.overflowing_add(1);
+            self.system_counter = result;
+            self.mem_dbg_write(DIV, (result >> 8) as u8);
+        }
+
+        let mut tima = self.mem_dbg_read(TIMA);
+        let tma = self.mem_dbg_read(TMA);
+        let tac = self.mem_dbg_read(TAC);
+
+        let tima_inc = match tac & 0x3 {
+            0x0 => self.system_counter.is_multiple_of(4 * 256),
+            0x1 => self.system_counter.is_multiple_of(4 * 4),
+            0x2 => self.system_counter.is_multiple_of(4 * 16),
+            0x3 => self.system_counter.is_multiple_of(4 * 64),
+            _ => panic!("How did you get here this is impossible"),
+        };
+
+        if tima_inc && tac & 0x4 == 0x4 {
+            let (result, overflow) = tima.overflowing_add(1);
+
+            if overflow {
+                self.mem_dbg_write(IF, self.mem_dbg_read(IF) | 0x4);
+                tima = self.internal_tma;
+            } else {
+                tima = result;
+            }
+        }
+
+        self.mem_dbg_write(TIMA, tima);
+
+        if t.is_multiple_of(4) {
+            self.internal_tma = tma;
+        }
+        self.mem_dbg_write(TAC, tac);
     }
 
     fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
@@ -50,4 +95,7 @@ impl Timer {
         self.with_mem_mut(|mem| mem.dbg_write(addr, data));
     }
 
+    pub fn check_write_div(&mut self) -> bool {
+        self.with_mem_mut(|mem| mem.check_write_div())
+    }
 }

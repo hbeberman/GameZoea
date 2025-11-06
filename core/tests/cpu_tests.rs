@@ -1688,7 +1688,6 @@ JoypadHandler:
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
     }
-    // }}}
 
     #[test]
     fn interrupt_hybrid() {
@@ -1717,6 +1716,70 @@ VBlankHandler:
         assert_hex_eq!(gb.cpu.bc(), 0x0114);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFD), 0x01);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFC), 0x59);
+    }
+
+    // {{{ test timer_basic_0
+    #[test]
+    #[ignore = "TODO"]
+    fn timer_basic_0() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test timer_basic_1
+    #[test]
+    fn timer_basic_1() {
+        const ROM: &[u8] = gbasm! {r#"
+  di
+  xor a
+  ld [$FF0F], a      ; clear IF
+  ld [$FF06], a      ; reset TMA
+  ld [$FF04], a      ; reset DIV
+  ld a, 0x5          ; enable timer, input clock 16384 Hz
+  ld [$FF07], a
+  ld a, $04          ; enable timer interrupt
+  ld [$FFFF], a
+  ei
+
+Loop:
+  inc a
+  jr Loop
+
+SECTION "TimerHandler", ROM0[$50]
+TimerHandler:
+  halt
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 9000);
+        assert_hex_eq!(gb.cpu.a(), 0xD1);
+    }
+    // }}}
+
+    // {{{ test timer_basic_2
+    #[test]
+    #[ignore = "TODO"]
+    fn timer_basic_2() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
+    }
+    // }}}
+
+    // {{{ test timer_basic_3
+    #[test]
+    #[ignore = "TODO"]
+    fn timer_basic_3() {
+        const ROM: &[u8] = gbasm! {r#"
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.tick(4 * 200);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
     }
     // }}}
 
