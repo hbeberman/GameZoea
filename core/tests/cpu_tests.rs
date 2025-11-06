@@ -1755,7 +1755,7 @@ TimerHandler:
   halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(20);
+        gb.step(900);
         assert_hex_eq!(gb.cpu.de(), 0x00A3);
     }
     // }}}

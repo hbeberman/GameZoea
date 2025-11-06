@@ -8,6 +8,11 @@ use std::time::{Duration, Instant};
 
 const NORMAL_CLOCK: f64 = 1.0 / 4_194_304.0;
 
+const L_CPU: u8 = 1 << 0;
+const L_ADJ: u8 = 1 << 1;
+const L_TIMER: u8 = 1 << 2;
+const L_R: u8 = 1 << 3;
+
 #[allow(dead_code)]
 pub struct Gameboy {
     pub t: u128,
@@ -67,6 +72,12 @@ impl Gameboy {
             self.tick(1);
             if cur != self.cpu.retired() {
                 i -= 1;
+                self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
+            }
+            if self.cpu.halted() {
+                self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
+                println!("HALT!");
+                return;
             }
         }
     }
@@ -84,5 +95,70 @@ impl Gameboy {
                 animate = Instant::now() + Duration::from_secs_f64(1.0 / 30.0);
             }
         }
+    }
+
+    fn log_status(&self, f: u8) {
+        let cpu = f & L_CPU != 0x00;
+        let adj = f & L_ADJ != 0x00;
+        let timer = f & L_TIMER != 0x00;
+        let retired = f & L_R != 0x00;
+        let pc = if adj {
+            self.cpu.prev_pc()
+        } else {
+            self.cpu.pc()
+        };
+        let cpustr = if cpu {
+            &format!(
+                "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X} ",
+                self.cpu.a(),
+                self.cpu.f(),
+                self.cpu.b(),
+                self.cpu.c(),
+                self.cpu.d(),
+                self.cpu.e(),
+                self.cpu.h(),
+                self.cpu.l(),
+                self.cpu.sp(),
+                pc,
+                self.mem_dbg_read(self.cpu.pc()),
+                self.mem_dbg_read(self.cpu.pc() + 1),
+                self.mem_dbg_read(self.cpu.pc() + 2),
+                self.mem_dbg_read(self.cpu.pc() + 3),
+            )
+        } else {
+            ""
+        };
+
+        let retiredstr = if retired {
+            let retired = self.cpu.retired().saturating_sub(2);
+            &format!("|| R:{:04X} ", retired)
+        } else {
+            ""
+        };
+
+        let timerstr = if timer {
+            &format!(
+                "|| DIV:{:02X} TIMA:{:02X} TMA:{:02X} TAC:{:02X} ",
+                self.mem_dbg_read(0xFF04),
+                self.mem_dbg_read(0xFF05),
+                self.mem_dbg_read(0xFF06),
+                self.mem_dbg_read(0xFF07)
+            )
+        } else {
+            ""
+        };
+
+        if pc != 0x0000 {
+            println!("{}{}{}", cpustr, retiredstr, timerstr);
+        };
+    }
+
+    fn with_mem<R>(&self, f: impl FnOnce(&Memory) -> R) -> R {
+        let mem = self.mem.borrow();
+        f(&mem)
+    }
+
+    pub fn mem_dbg_read(&self, addr: u16) -> u8 {
+        self.with_mem(|mem| mem.dbg_read(addr))
     }
 }

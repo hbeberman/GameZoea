@@ -207,6 +207,8 @@ pub struct Cpu {
     executing: fn(&mut Cpu),
     halted: bool,
     retired: u64,
+    cur_pc: u16,
+    prev_pc: u16,
 }
 
 impl Cpu {
@@ -232,25 +234,6 @@ impl Cpu {
         } else {
             let (result, _) = self.retired.overflowing_add(1);
             self.retired = result;
-
-            println!(
-                "A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X} retired:{}",
-                self.a(),
-                self.f(),
-                self.b(),
-                self.c(),
-                self.d(),
-                self.e(),
-                self.h(),
-                self.l(),
-                self.sp(),
-                self.pc(),
-                self.mem_dbg_read(self.pc()),
-                self.mem_dbg_read(self.pc() + 1),
-                self.mem_dbg_read(self.pc() + 2),
-                self.mem_dbg_read(self.pc() + 3),
-                self.retired(),
-            );
 
             match self.ir() {
                 // Block 0
@@ -371,6 +354,7 @@ impl Cpu {
         self.set_addr(self.pc());
         self.mem_read();
         self.set_ir(self.data());
+        self.push_pc(self.pc());
         self.inc_pc();
         self.mc = M0;
         self.executing = self.decode();
@@ -398,18 +382,23 @@ impl Cpu {
             self.mc = M0;
             self.executing = if hit & 0x01 != 0 {
                 self.mem_dbg_write(0xFF0F, reg_if & !0x01);
+                self.push_pc(0x0040);
                 Cpu::int_vblank
             } else if hit & 0x02 != 0 {
                 self.mem_dbg_write(0xFF0F, reg_if & !0x02);
+                self.push_pc(0x0048);
                 Cpu::int_stat
             } else if hit & 0x04 != 0 {
                 self.mem_dbg_write(0xFF0F, reg_if & !0x04);
+                self.push_pc(0x0050);
                 Cpu::int_timer
             } else if hit & 0x08 != 0 {
                 self.mem_dbg_write(0xFF0F, reg_if & !0x08);
+                self.push_pc(0x0058);
                 Cpu::int_serial
             } else if hit & 0x10 != 0 {
                 self.mem_dbg_write(0xFF0F, reg_if & !0x10);
+                self.push_pc(0x0060);
                 Cpu::int_joypad
             } else {
                 panic!("Invalid value in interrupt registers");
@@ -450,6 +439,8 @@ impl Cpu {
             executing: Cpu::nop,
             halted: false,
             retired: 0,
+            cur_pc: 0,
+            prev_pc: 0,
         }
     }
 
@@ -1753,6 +1744,7 @@ impl Cpu {
                 self.set_addr(self.hl());
                 self.mem_read();
                 self.set_ir(self.data());
+                self.push_pc(self.hl());
                 self.set_pc(self.hl() + 1);
                 self.set_mc(M0);
                 self.executing = self.decode();
@@ -2928,6 +2920,10 @@ impl Cpu {
         self.mc
     }
 
+    pub fn halted(&self) -> bool {
+        self.halted
+    }
+
     pub fn retired(&self) -> u64 {
         self.retired
     }
@@ -3040,6 +3036,19 @@ impl Cpu {
 
     pub fn pcl(&self) -> u8 {
         self.r.pc as u8
+    }
+
+    pub fn prev_pc(&self) -> u16 {
+        self.prev_pc
+    }
+
+    pub fn cur_pc(&self) -> u16 {
+        self.cur_pc
+    }
+
+    pub fn push_pc(&mut self, pc: u16) {
+        self.prev_pc = self.cur_pc;
+        self.cur_pc = pc;
     }
 
     pub fn wz(&self) -> u16 {
@@ -3272,6 +3281,8 @@ impl std::default::Default for Cpu {
             executing: Cpu::nop,
             halted: false,
             retired: 0,
+            cur_pc: 0,
+            prev_pc: 0,
         }
     }
 }

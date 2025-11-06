@@ -49,6 +49,7 @@ impl Memory {
             0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
             0xFF04 => self.write_div = true, // Clear the div register during timer tick
+            0xFF07 => self.set_tac(data),    // Clear the div register during timer tick
             0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
             0xFFFF => self.mem[addr as usize] = data, // Interrupt Enable
@@ -77,6 +78,10 @@ impl Memory {
 
     pub fn set_data(&mut self, data: u8) {
         self.data = data
+    }
+
+    pub fn set_tac(&mut self, tac: u8) {
+        self.mem[0xFF07] = (self.mem[0xFF07] & 0xF8) + (tac & 0x07);
     }
 
     pub fn check_write_div(&mut self) -> bool {

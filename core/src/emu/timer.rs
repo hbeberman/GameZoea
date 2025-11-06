@@ -18,7 +18,7 @@ impl Timer {
     pub fn init_dmg(mem: Rc<RefCell<Memory>>) -> Self {
         Timer {
             mem,
-            system_counter: 0,
+            system_counter: 0xAC00,
             internal_tma: 0,
         }
     }
@@ -65,7 +65,6 @@ impl Timer {
         if t.is_multiple_of(4) {
             self.internal_tma = tma;
         }
-        self.mem_dbg_write(TAC, tac);
     }
 
     fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
