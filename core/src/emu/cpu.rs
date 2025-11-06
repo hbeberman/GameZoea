@@ -206,6 +206,7 @@ pub struct Cpu {
     mc: Mc,
     executing: fn(&mut Cpu),
     halted: bool,
+    retired: u64,
 }
 
 impl Cpu {
@@ -229,8 +230,11 @@ impl Cpu {
                 0xC0..=0xFF => Cpu::set_b3_r8,
             }
         } else {
+            let (result, _) = self.retired.overflowing_add(1);
+            self.retired = result;
+
             println!(
-                "A:{:02X} F:{:02X} B:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",
+                "A:{:02X} F:{:02X} B:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X} retired:{}",
                 self.a(),
                 self.f(),
                 self.b(),
@@ -244,7 +248,9 @@ impl Cpu {
                 self.mem_dbg_read(self.pc() + 1),
                 self.mem_dbg_read(self.pc() + 2),
                 self.mem_dbg_read(self.pc() + 3),
+                self.retired(),
             );
+
             match self.ir() {
                 // Block 0
                 0x00 => Cpu::nop,
@@ -442,6 +448,7 @@ impl Cpu {
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
+            retired: 0,
         }
     }
 
@@ -2920,6 +2927,10 @@ impl Cpu {
         self.mc
     }
 
+    pub fn retired(&self) -> u64 {
+        self.retired
+    }
+
     pub fn ime(&self) -> u8 {
         self.ime
     }
@@ -3259,6 +3270,7 @@ impl std::default::Default for Cpu {
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
+            retired: 0,
         }
     }
 }

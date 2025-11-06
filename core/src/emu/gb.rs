@@ -60,6 +60,17 @@ impl Gameboy {
         }
     }
 
+    pub fn step(&mut self, count: u128) {
+        let mut i = count;
+        while i > 0 {
+            let cur = self.cpu.retired();
+            self.tick(1);
+            if cur != self.cpu.retired() {
+                i -= 1;
+            }
+        }
+    }
+
     pub fn run(&mut self) {
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
         let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);

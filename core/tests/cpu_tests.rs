@@ -1735,6 +1735,7 @@ VBlankHandler:
     fn timer_basic_1() {
         const ROM: &[u8] = gbasm! {r#"
   di
+  ld de, 0x0000
   xor a
   ld [$FF0F], a      ; clear IF
   ld [$FF06], a      ; reset TMA
@@ -1746,7 +1747,7 @@ VBlankHandler:
   ei
 
 Loop:
-  inc a
+  inc de
   jr Loop
 
 SECTION "TimerHandler", ROM0[$50]
@@ -1754,8 +1755,8 @@ TimerHandler:
   halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.tick(4 * 9000);
-        assert_hex_eq!(gb.cpu.a(), 0xD1);
+        gb.step(20);
+        assert_hex_eq!(gb.cpu.de(), 0x00A3);
     }
     // }}}
 

@@ -18,6 +18,7 @@ impl Memory {
     pub fn new(cartridge: &[u8]) -> Self {
         let mut mem = [0u8; 0x10000];
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
+        mem[0xFF07] = 0xF8; // TAC initial value
         Memory {
             mem,
             data: 0x00,
