@@ -28,6 +28,7 @@ impl Timer {
             self.system_counter = 0;
         }
 
+        let snapshot = self.system_counter;
         if t.is_multiple_of(4) {
             let (result, _) = self.system_counter.overflowing_add(1);
             self.system_counter = result;
@@ -38,15 +39,17 @@ impl Timer {
         let tma = self.mem_dbg_read(TMA);
         let tac = self.mem_dbg_read(TAC);
 
-        let tima_inc = match tac & 0x3 {
-            0x0 => self.system_counter.is_multiple_of(4 * 256),
-            0x1 => self.system_counter.is_multiple_of(4 * 4),
-            0x2 => self.system_counter.is_multiple_of(4 * 16),
-            0x3 => self.system_counter.is_multiple_of(4 * 64),
-            _ => panic!("How did you get here this is impossible"),
+        let delta = snapshot ^ self.system_counter;
+
+        let falling_match = match tac & 0x3 {
+            0x0 => 0x80,
+            0x1 => 0x02,
+            0x2 => 0x08,
+            0x3 => 0x20,
+            _ => unreachable!(),
         };
 
-        if tima_inc && tac & 0x4 == 0x4 {
+        if falling_match & delta != 0x0 && tac & 0x4 == 0x4 {
             let (result, overflow) = tima.overflowing_add(1);
 
             if overflow {
