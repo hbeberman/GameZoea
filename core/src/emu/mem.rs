@@ -20,8 +20,8 @@ impl Memory {
     pub fn new(cartridge: &[u8]) -> Self {
         let mut mem = [0u8; 0x10000];
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
-        mem[0xFF05] = 0x32; // TIMA initial value after DMG boot ROM
-        mem[0xFF07] = 0xF9; // TAC initial value (bit 2 starts as 0)
+        mem[0xFF05] = 0x00; // TIMA initial value after DMG boot ROM
+        mem[0xFF07] = 0xF8; // TAC initial value after DMG boot ROM
         Memory {
             mem,
             data: 0x00,
@@ -52,8 +52,12 @@ impl Memory {
             0xE000..0xFE00 => panic!("Memory write to echo RAM: {:04x}:{:02x}", addr, data),
             0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
-            0xFF04 => self.write_div = true, // Clear the div register during timer tick
-            0xFF07 => self.set_tac(data),    // Clear the div register during timer tick
+            0xFF04 => {
+                self.mem[addr as usize] = 0;
+                self.write_div = true;
+            }
+            0xFF05 => self.mem[addr as usize] = data,
+            0xFF07 => self.set_tac(data),
             0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
             0xFFFF => self.mem[addr as usize] = data, // Interrupt Enable

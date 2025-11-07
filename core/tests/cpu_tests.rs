@@ -1744,7 +1744,7 @@ TimerHandler:
   ld [$FF07], a
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(2000);
+        gb.step(80000);
         assert_hex_eq!(gb.cpu.de(), 0x3331);
     }
     // }}}
@@ -1771,11 +1771,13 @@ Loop:
 
 SECTION "TimerHandler", ROM0[$50]
 TimerHandler:
+  ld a, 0x0
+  ld [$FF07], a
   halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(900);
-        assert_hex_eq!(gb.cpu.de(), 0x00A3);
+        gb.step(2000);
+        assert_hex_eq!(gb.cpu.de(), 0x00CB);
     }
     // }}}
 
@@ -1801,11 +1803,12 @@ Loop:
 
 SECTION "TimerHandler", ROM0[$50]
 TimerHandler:
-  dec a
+  ld a, 0x0
   ld [$FF07], a
+  halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.tick(8000);
+        gb.step(20000);
         assert_hex_eq!(gb.cpu.de(), 0x0331);
     }
     // }}}
@@ -1832,12 +1835,46 @@ Loop:
 
 SECTION "TimerHandler", ROM0[$50]
 TimerHandler:
-  dec a
+  ld a, 0x0
   ld [$FF07], a
+  halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.tick(8000);
+        gb.step(20000);
         assert_hex_eq!(gb.cpu.de(), 0x0CCB);
+    }
+    // }}}
+
+    // {{{ test timer_tma_1
+    #[test]
+    fn timer_tma_1() {
+        const ROM: &[u8] = gbasm! {r#"
+  di
+  ld de, 0x0000
+  xor a
+  ld [$FF0F], a      ; clear IF
+  ld a, 0xE0
+  ld [$FF06], a      ; reset TMA
+  ld [$FF04], a      ; reset DIV
+  ld a, 0x5          ; enable timer
+  ld [$FF07], a
+  ld a, $04          ; enable timer interrupt
+  ld [$FFFF], a
+  ei
+
+Loop:
+  inc de
+  jr Loop
+
+SECTION "TimerHandler", ROM0[$50]
+TimerHandler:
+  ld a, 0x0
+  ld [$FF07], a
+  halt
+    "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(20000);
+        assert_hex_eq!(gb.cpu.de(), 0x00CB);
     }
     // }}}
 

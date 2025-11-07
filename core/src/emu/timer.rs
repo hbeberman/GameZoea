@@ -12,77 +12,108 @@ pub struct Timer {
     mem: Rc<RefCell<Memory>>,
     system_counter: u16,
     internal_tma: u8,
-    prev_edge_signal: bool,
+    prev_signal: bool,
+    last_tac: u8,
+    overflow_delay: u8,
 }
 
 impl Timer {
     pub fn init_dmg(mem: Rc<RefCell<Memory>>) -> Self {
+        let (initial_tma, initial_tac) = {
+            let mem_ref = mem.borrow();
+            (mem_ref.dbg_read(TMA), mem_ref.dbg_read(TAC))
+        };
         Timer {
             mem,
-            system_counter: 0xAC00,
-            internal_tma: 0,
-            prev_edge_signal: false,
+            system_counter: 0,
+            internal_tma: initial_tma,
+            prev_signal: false,
+            last_tac: initial_tac,
+            overflow_delay: 0,
         }
     }
 
-    pub fn tick(&mut self, t: u128) {
-        // Handle DIV reset FIRST
-        let div_was_reset = self.check_write_div();
-        if div_was_reset {
-            self.system_counter = 0;
-        }
-
-        // Increment system counter
-        if t.is_multiple_of(4) {
-            let (result, _) = self.system_counter.overflowing_add(1);
-            self.system_counter = result;
-            self.mem_dbg_write(DIV, (result >> 8) as u8);
-        }
-
-        // Read TAC and calculate current edge signal AFTER incrementing
-        let tac = self.mem_dbg_read(TAC);
-        let timer_enabled = (tac & 0x4) != 0;
-        let mask = match tac & 0x3 {
-            0x0 => 1 << 9,
+    fn timer_bit_mask(tac: u8) -> u16 {
+        match tac & 0x3 {
+            0x0 => 1 << 7,
             0x1 => 1 << 1,
-            0x2 => 1 << 5,
-            0x3 => 1 << 7,
+            0x2 => 1 << 3,
+            0x3 => 1 << 5,
             _ => unreachable!(),
-        };
-
-        let curr_edge_signal = timer_enabled && (self.system_counter & mask) != 0;
-
-        // If TAC was just written, reset edge detector to prevent spurious edge
-        let tac_was_written = self.check_write_tac();
-        if tac_was_written {
-            self.prev_edge_signal = curr_edge_signal;
         }
+    }
 
-        // Detect falling edge: previous tick had 1, current tick has 0
-        // But don't detect if TAC was just written this tick
-        let falling = !tac_was_written && self.prev_edge_signal && !curr_edge_signal;
+    fn timer_signal(&self, counter: u16, tac: u8) -> bool {
+        if tac & 0x4 == 0 {
+            return false;
+        }
+        (counter & Self::timer_bit_mask(tac)) != 0
+    }
 
-        let mut tima = self.mem_dbg_read(TIMA);
-        let tma = self.mem_dbg_read(TMA);
+    pub fn tick(&mut self, t: u128) {
+        self.internal_tma = self.mem_dbg_read(TMA);
 
-        if falling {
-            let (result, overflow) = tima.overflowing_add(1);
-
-            if overflow {
+        if self.overflow_delay > 0 {
+            self.overflow_delay -= 1;
+            if self.overflow_delay == 0 {
+                self.mem_dbg_write(TIMA, self.internal_tma);
                 self.mem_dbg_write(IF, self.mem_dbg_read(IF) | 0x4);
-                tima = self.internal_tma;
-            } else {
-                tima = result;
             }
         }
 
-        self.mem_dbg_write(TIMA, tima);
+        let mut prev_signal = self.prev_signal;
+        let mut skip_counter_tick = false;
 
-        // Update prev_edge_signal for next tick
-        self.prev_edge_signal = curr_edge_signal;
+        if self.check_write_div() {
+            let tac = self.mem_dbg_read(TAC);
+            let signal_before = self.timer_signal(self.system_counter, tac);
+            self.system_counter = 0;
+            self.mem_dbg_write(DIV, 0);
+            let signal_after = self.timer_signal(self.system_counter, tac);
 
-        if t.is_multiple_of(4) {
-            self.internal_tma = tma;
+            if signal_before && !signal_after {
+                self.increment_tima();
+            }
+            prev_signal = signal_after;
+            skip_counter_tick = true;
+        }
+
+        if self.check_write_tac() {
+            let old_tac = self.last_tac;
+            let new_tac = self.mem_dbg_read(TAC);
+            self.last_tac = new_tac;
+
+            let signal_before = self.timer_signal(self.system_counter, old_tac);
+            let signal_after = self.timer_signal(self.system_counter, new_tac);
+
+            if signal_before && !signal_after {
+                self.increment_tima();
+            }
+            prev_signal = signal_after;
+        }
+
+        if t.is_multiple_of(4) && !skip_counter_tick {
+            self.system_counter = (self.system_counter + 1) & 0x3FFF;
+            self.mem_dbg_write(DIV, (self.system_counter >> 6) as u8);
+        }
+
+        let new_signal = self.timer_signal(self.system_counter, self.mem_dbg_read(TAC));
+        if prev_signal && !new_signal {
+            self.increment_tima();
+        }
+
+        self.prev_signal = new_signal;
+    }
+
+    fn increment_tima(&mut self) {
+        let tima = self.mem_dbg_read(TIMA);
+        let (result, overflow) = tima.overflowing_add(1);
+
+        if overflow {
+            self.mem_dbg_write(TIMA, 0);
+            self.overflow_delay = 4;
+        } else {
+            self.mem_dbg_write(TIMA, result);
         }
     }
 
