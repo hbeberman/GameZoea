@@ -3,6 +3,7 @@ pub struct Memory {
     data: u8,
     addr: u16,
     write_div: bool,
+    write_tac: bool,
 }
 
 impl Memory {
@@ -12,18 +13,21 @@ impl Memory {
             data: 0x00,
             addr: 0x0000,
             write_div: false,
+            write_tac: false,
         }
     }
 
     pub fn new(cartridge: &[u8]) -> Self {
         let mut mem = [0u8; 0x10000];
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
-        mem[0xFF07] = 0xF8; // TAC initial value
+        mem[0xFF05] = 0x32; // TIMA initial value after DMG boot ROM
+        mem[0xFF07] = 0xF9; // TAC initial value (bit 2 starts as 0)
         Memory {
             mem,
             data: 0x00,
             addr: 0x0000,
             write_div: false,
+            write_tac: false,
         }
     }
 
@@ -82,11 +86,18 @@ impl Memory {
 
     pub fn set_tac(&mut self, tac: u8) {
         self.mem[0xFF07] = (self.mem[0xFF07] & 0xF8) + (tac & 0x07);
+        self.write_tac = true;
     }
 
     pub fn check_write_div(&mut self) -> bool {
         let result = self.write_div;
         self.write_div = false;
+        result
+    }
+
+    pub fn check_write_tac(&mut self) -> bool {
+        let result = self.write_tac;
+        self.write_tac = false;
         result
     }
 }

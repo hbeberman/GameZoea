@@ -12,6 +12,7 @@ pub struct Timer {
     mem: Rc<RefCell<Memory>>,
     system_counter: u16,
     internal_tma: u8,
+    prev_edge_signal: bool,
 }
 
 impl Timer {
@@ -20,36 +21,51 @@ impl Timer {
             mem,
             system_counter: 0xAC00,
             internal_tma: 0,
+            prev_edge_signal: false,
         }
     }
 
     pub fn tick(&mut self, t: u128) {
-        if self.check_write_div() {
+        // Handle DIV reset FIRST
+        let div_was_reset = self.check_write_div();
+        if div_was_reset {
             self.system_counter = 0;
         }
 
-        let snapshot = self.system_counter;
-
+        // Increment system counter
         if t.is_multiple_of(4) {
             let (result, _) = self.system_counter.overflowing_add(1);
             self.system_counter = result;
             self.mem_dbg_write(DIV, (result >> 8) as u8);
         }
 
-        let mut tima = self.mem_dbg_read(TIMA);
-        let tma = self.mem_dbg_read(TMA);
+        // Read TAC and calculate current edge signal AFTER incrementing
         let tac = self.mem_dbg_read(TAC);
-
+        let timer_enabled = (tac & 0x4) != 0;
         let mask = match tac & 0x3 {
-            0x0 => 1 << 7,
+            0x0 => 1 << 9,
             0x1 => 1 << 1,
-            0x2 => 1 << 3,
-            0x3 => 1 << 5,
+            0x2 => 1 << 5,
+            0x3 => 1 << 7,
             _ => unreachable!(),
         };
-        let falling = snapshot & mask != 0 && self.system_counter & mask == 0;
 
-        if falling && tac & 0x4 == 0x4 {
+        let curr_edge_signal = timer_enabled && (self.system_counter & mask) != 0;
+
+        // If TAC was just written, reset edge detector to prevent spurious edge
+        let tac_was_written = self.check_write_tac();
+        if tac_was_written {
+            self.prev_edge_signal = curr_edge_signal;
+        }
+
+        // Detect falling edge: previous tick had 1, current tick has 0
+        // But don't detect if TAC was just written this tick
+        let falling = !tac_was_written && self.prev_edge_signal && !curr_edge_signal;
+
+        let mut tima = self.mem_dbg_read(TIMA);
+        let tma = self.mem_dbg_read(TMA);
+
+        if falling {
             let (result, overflow) = tima.overflowing_add(1);
 
             if overflow {
@@ -61,6 +77,9 @@ impl Timer {
         }
 
         self.mem_dbg_write(TIMA, tima);
+
+        // Update prev_edge_signal for next tick
+        self.prev_edge_signal = curr_edge_signal;
 
         if t.is_multiple_of(4) {
             self.internal_tma = tma;
@@ -99,5 +118,9 @@ impl Timer {
 
     pub fn check_write_div(&mut self) -> bool {
         self.with_mem_mut(|mem| mem.check_write_div())
+    }
+
+    pub fn check_write_tac(&mut self) -> bool {
+        self.with_mem_mut(|mem| mem.check_write_tac())
     }
 }
