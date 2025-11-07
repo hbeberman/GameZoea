@@ -378,6 +378,7 @@ impl Cpu {
         let reg_if = self.mem_dbg_read(0xFF0F);
         let hit = reg_ie & reg_if;
         if self.ime == 1 && hit != 0x00 {
+            self.halted = false;
             self.set_ime(0x00);
             self.mc = M0;
             self.executing = if hit & 0x01 != 0 {
@@ -2786,8 +2787,10 @@ impl Cpu {
 
     // {{{ Cycle Functions
     pub fn tick(&mut self, t: u128) {
-        if t.is_multiple_of(4) && !self.halted {
-            self.execute();
+        if t.is_multiple_of(4) {
+            if !self.halted {
+                self.execute();
+            }
             self.handle_interrupts();
             if self.ime() == 0x2 {
                 self.set_ime(0x1);

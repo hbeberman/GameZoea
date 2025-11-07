@@ -41,10 +41,10 @@ impl Timer {
         let tac = self.mem_dbg_read(TAC);
 
         let mask = match tac & 0x3 {
-            0x0 => 0x80,
-            0x1 => 0x02,
-            0x2 => 0x08,
-            0x3 => 0x20,
+            0x0 => 1 << 7,
+            0x1 => 1 << 1,
+            0x2 => 1 << 3,
+            0x3 => 1 << 5,
             _ => unreachable!(),
         };
         let falling = snapshot & mask != 0 && self.system_counter & mask == 0;
