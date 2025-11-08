@@ -178,8 +178,8 @@ impl Ppu {
         // TODO: Need to handle windowing and tilemapping
         let map = 0x00;
         match map {
-            0x00 => self.mem_read(0x9800 + x as u16 + (y as u16) * 0x0020),
-            0x01 => self.mem_read(0x9C00 + x as u16 + (y as u16) * 0x0020),
+            0x00 => self.mem_read(0x9800 + x as u16 + (y as u16) * 32),
+            0x01 => self.mem_read(0x9C00 + x as u16 + (y as u16) * 32),
             _ => panic!("Invalid tile map value used!"),
         }
     }
@@ -259,14 +259,27 @@ impl Ppu {
         let y = self.ly();
         match self.fetch_state {
             Fetch::Tile => {
-                self.fetch_tile = self.read_tile(x, y);
+                let scx = self.mem_read(SCX);
+                let scy = self.mem_read(SCY);
+                // Calculate background pixel position with scroll
+                let bg_x = x.wrapping_add(scx);
+                let bg_y = y.wrapping_add(scy);
+                // Convert to tile coordinates (divide by 8)
+                let tile_x = (bg_x / 8) % 32;
+                let tile_y = (bg_y / 8) % 32;
+
+                self.fetch_tile = self.read_tile(tile_x, tile_y);
             }
             Fetch::DataLo => {
-                self.fetch_tile_datalo = self.mem_read(self.tile_address_lo(self.fetch_tile, y));
+                let scy = self.mem_read(SCY);
+                let tile_row = y.wrapping_add(scy) % 8;
+                self.fetch_tile_datalo = self.mem_read(self.tile_address_lo(self.fetch_tile, tile_row));
             }
             Fetch::DataHi => {
+                let scy = self.mem_read(SCY);
+                let tile_row = y.wrapping_add(scy) % 8;
                 self.fetch_tile_datahi =
-                    self.mem_read(self.tile_address_lo(self.fetch_tile, y) + 1);
+                    self.mem_read(self.tile_address_lo(self.fetch_tile, tile_row) + 1);
             }
             Fetch::Push => {
                 if !self.bg_fifo.is_empty() {
