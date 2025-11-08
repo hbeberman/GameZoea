@@ -57,7 +57,7 @@ Forever:
         assert_hex_eq!(td[3], 0x42);
     }
 
-    // {{{ test vram_writes
+    // {{{ test ppu_tile_read_lcdc4
     #[test]
     fn ppu_tile_read_lcdc4() {
         const ROM: &[u8] = gbasm! {r#"
@@ -176,5 +176,147 @@ TileHollow:
         assert_hex_eq!(td[2], 0x81);
         assert_hex_eq!(td[3], 0xFF);
     }
+
+    #[test]
+    fn ppu_tile_numbers() {
+        const ROM: &[u8] = gbasm! {r#"
+  def rLCDC equ $FF40
+  def rBGP equ $FF47
+  ; Disable LCD for VRAM writes
+  ld a, [rLCDC]
+  res 7, a
+  ld [rLCDC], a
+
+  ;-----------------------------------------
+  ; Write blank tile #0 (16 bytes of 0)
+  ;-----------------------------------------
+  ld hl, $8000
+  ld b, 16
+.clear0:
+  xor a
+  ld [hli], a
+  dec b
+  jr nz, .clear0
+
+  ;-----------------------------------------
+  ; Copy tiles 1–F right after blank tile
+  ;-----------------------------------------
+  ld de, Tiles
+  ld bc, TilesEnd - Tiles
+.copyTiles:
+  ld a, [de]
+  ld [hli], a
+  inc de
+  dec bc
+  ld a, b
+  or c
+  jr nz, .copyTiles
+
+  ;-----------------------------------------
+  ; Fill 32×32 BG map with repeating 1–F pattern
+  ;-----------------------------------------
+  ld hl, $9800
+  ld b, 32          ; rows
+RowLoop:
+  ld c, 32          ; columns
+  ld a, 1           ; restart each row
+ColLoop:
+  ld [hli], a
+  inc a
+  cp $10
+  jr nz, .noWrap
+  ld a, 1
+.noWrap:
+  dec c
+  jr nz, ColLoop
+
+  dec b
+  jr nz, RowLoop
+
+  ;-----------------------------------------
+  ; Palette and LCD enable
+  ;-----------------------------------------
+  ld a, $E4
+  ld [rBGP], a
+  ld a, %10010001   ; LCD ON, BG ON, unsigned IDs ($8000)
+  ld [rLCDC], a
+
+Forever:
+  jr Forever
+
+;===================================================
+; Tile Data (digits 1–F)
+;===================================================
+SECTION "Tiles", ROM0
+
+Tiles:
+; 1
+  db $18,$00,$38,$00,$18,$00,$18,$00
+  db $18,$00,$18,$00,$18,$00,$3C,$00
+; 2
+  db $3C,$00,$66,$00,$06,$00,$0C,$00
+  db $18,$00,$30,$00,$60,$00,$7E,$00
+; 3
+  db $3C,$00,$66,$00,$06,$00,$1C,$00
+  db $06,$00,$06,$00,$66,$00,$3C,$00
+; 4
+  db $0C,$00,$1C,$00,$3C,$00,$6C,$00
+  db $7E,$00,$0C,$00,$0C,$00,$0C,$00
+; 5
+  db $7E,$00,$60,$00,$7C,$00,$06,$00
+  db $06,$00,$06,$00,$66,$00,$3C,$00
+; 6
+  db $1C,$00,$30,$00,$60,$00,$7C,$00
+  db $66,$00,$66,$00,$66,$00,$3C,$00
+; 7
+  db $7E,$00,$06,$00,$0C,$00,$0C,$00
+  db $18,$00,$18,$00,$30,$00,$30,$00
+; 8
+  db $3C,$00,$66,$00,$66,$00,$3C,$00
+  db $66,$00,$66,$00,$66,$00,$3C,$00
+; 9
+  db $3C,$00,$66,$00,$66,$00,$3E,$00
+  db $06,$00,$0C,$00,$18,$00,$70,$00
+; A
+  db $3C,$00,$66,$00,$66,$00,$7E,$00
+  db $66,$00,$66,$00,$66,$00,$66,$00
+; B
+  db $7C,$00,$66,$00,$66,$00,$7C,$00
+  db $66,$00,$66,$00,$66,$00,$7C,$00
+; C
+  db $3C,$00,$66,$00,$60,$00,$60,$00
+  db $60,$00,$60,$00,$66,$00,$3C,$00
+; D
+  db $78,$00,$6C,$00,$66,$00,$66,$00
+  db $66,$00,$66,$00,$6C,$00,$78,$00
+; E
+  db $7E,$00,$60,$00,$60,$00,$7C,$00
+  db $60,$00,$60,$00,$60,$00,$7E,$00
+; F
+  db $7E,$00,$60,$00,$60,$00,$7C,$00
+  db $60,$00,$60,$00,$60,$00,$60,$00
+TilesEnd:
+    "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(80000);
+        let td = gb.ppu.read_whole_tile_data(false, 0x00,0x00);
+        assert_hex_eq!(td[0], 0x00);
+        assert_hex_eq!(td[1], 0x00);
+        assert_hex_eq!(td[2], 0x00);
+        assert_hex_eq!(td[3], 0x00);
+        let td = gb.ppu.read_whole_tile_data(false, 0x01,0x00);
+        assert_hex_eq!(td[0], 0x18);
+        assert_hex_eq!(td[1], 0x00);
+        assert_hex_eq!(td[2], 0x38);
+        assert_hex_eq!(td[3], 0x00);
+        let td = gb.ppu.read_whole_tile_data(false, 0x02,0x00);
+        assert_hex_eq!(td[0], 0x3C);
+        assert_hex_eq!(td[1], 0x00);
+        assert_hex_eq!(td[2], 0x66);
+        assert_hex_eq!(td[3], 0x00);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0x9800), 0x01);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0x9801), 0x02);
+    }
+
 
     // }}}
