@@ -10,6 +10,34 @@ pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
 const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
 
+const LCDC: u16 = 0xFF40;
+const STAT: u16 = 0xFF41;
+const SCY: u16 = 0xFF42;
+const SCX: u16 = 0xFF43;
+const LY: u16 = 0xFF44;
+const LYC: u16 = 0xFF45;
+const BGP: u16 = 0xFF47;
+const WY: u16 = 0xFF4A;
+const WX: u16 = 0xFF4B; // TODO: pandocs say WX0 and WX116 are weird
+
+enum Mode {
+    M0,
+    M1,
+    M2,
+    M3,
+}
+
+impl Mode {
+    fn next(&self) -> Self {
+        match self {
+            Mode::M0 => Mode::M1,
+            Mode::M1 => Mode::M2,
+            Mode::M2 => Mode::M3,
+            Mode::M3 => Mode::M0,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Ppu {
     frame_tx: Option<FrameSender>,
@@ -19,6 +47,7 @@ pub struct Ppu {
     x: u8,
     pub testing: usize,
     back_buffer: Vec<u8>,
+    mode: Mode,
 }
 
 #[allow(dead_code)]
@@ -31,7 +60,7 @@ pub struct Pixel {
 
 impl Ppu {
     pub fn headless_dmg(mem: Rc<RefCell<Memory>>) -> Self {
-        Ppu {
+        let mut ppu = Ppu {
             frame_tx: None,
             mem,
             bg_fifo: Vec::<Pixel>::new(),
@@ -39,7 +68,20 @@ impl Ppu {
             x: 0,
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
-        }
+            mode: Mode::M0,
+        };
+
+        ppu.mem_dbg_write(LCDC, 0x91);
+        ppu.mem_dbg_write(STAT, 0x80);
+        ppu.mem_dbg_write(SCY, 0x00);
+        ppu.mem_dbg_write(SCX, 0x00);
+        ppu.mem_dbg_write(LY, 0x00);
+        ppu.mem_dbg_write(LYC, 0x00);
+        ppu.mem_dbg_write(BGP, 0xFC);
+        ppu.mem_dbg_write(WY, 0x00);
+        ppu.mem_dbg_write(WX, 0x00);
+
+        ppu
     }
 
     pub fn init_dmg(frame_tx: FrameSender, mem: Rc<RefCell<Memory>>) -> Self {
@@ -51,6 +93,7 @@ impl Ppu {
             x: 0,
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
+            mode: Mode::M0,
         }
     }
 
@@ -130,13 +173,13 @@ impl Ppu {
     pub fn set_stat_bit(&mut self, lyc: u8) {
         let mut stat = self.mem_dbg_read(0xFF41);
         stat &= 0x1 << lyc;
-        self.mem_dbg_write(0xFF41, stat)
+        self.mem_dbg_write(STAT, stat)
     }
 
     pub fn clear_stat_bit(&mut self, lyc: u8) {
         let mut stat = self.mem_dbg_read(0xFF41);
         stat &= !(0x1 << lyc);
-        self.mem_dbg_write(0xFF41, stat)
+        self.mem_dbg_write(STAT, stat)
     }
 
     pub fn update_stat(&mut self) {

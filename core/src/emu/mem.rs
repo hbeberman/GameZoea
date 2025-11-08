@@ -56,11 +56,10 @@ impl Memory {
                 self.mem[addr as usize] = 0;
                 self.write_div = true;
             }
-            0xFF05 => self.mem[addr as usize] = data,
             0xFF07 => self.set_tac(data),
             0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
-            0xFFFF => self.mem[addr as usize] = data, // Interrupt Enable
+            0xFFFF => self.mem[addr as usize] = data,         // Interrupt Enable
         }
     }
 
