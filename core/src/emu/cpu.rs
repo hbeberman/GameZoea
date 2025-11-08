@@ -2061,22 +2061,28 @@ impl Cpu {
             M4 => {
                 self.set_addr(self.pc());
                 self.mem_read();
-                self.set_w(self.data());
+                self.set_z(self.data());
                 self.inc_pc();
             }
             M3 => {
                 self.set_addr(self.pc());
                 self.mem_read();
-                self.set_z(self.data());
+                self.set_w(self.data());
                 self.inc_pc();
             }
             M2 => {
-                self.set_addr(0xFF00 + self.z() as u16);
+                self.set_addr(self.wz());
                 self.mem_read();
                 self.set_z(self.data());
             }
             M1 => {
                 self.set_a(self.z());
+                eprintln!(
+                    "$$$$$$$$$$$ addr:{:04X} data:{:02X} a:{:02X}",
+                    self.addr(),
+                    self.data(),
+                    self.a()
+                );
                 self.fetch_next();
             }
             M0 => self.set_mc(M5),

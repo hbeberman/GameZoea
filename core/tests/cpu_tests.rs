@@ -1290,7 +1290,7 @@ SkipIncA:
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
         gb.tick(4 * 200);
-        assert_hex_eq!(gb.cpu.a(), 0x00);
+        assert_hex_eq!(gb.cpu.a(), 0xA5);
     }
     // }}}
 
@@ -1875,6 +1875,77 @@ TimerHandler:
         let mut gb = Gameboy::headless_dmg(ROM);
         gb.step(20000);
         assert_hex_eq!(gb.cpu.de(), 0x00CB);
+    }
+    // }}}
+
+    // {{{ test vram_writes
+    #[test]
+    fn vram_writes() {
+        const ROM: &[u8] = gbasm! {r#"
+    ; Disable LCD so VRAM can be safely written
+    ld a, [$FF40]
+    res 7, a
+    ld [$FF40], a
+
+    ; Write tile data directly to VRAM ($8000)
+    ld hl, $8000
+    ld a, $3C
+    ld [hli], a
+    ld a, $7E
+    ld [hli], a
+    ld a, $42
+    ld [hli], a
+    ld a, $42
+    ld [hli], a
+    ld a, $42
+    ld [hli], a
+    ld a, $42
+    ld [hli], a
+    ld a, $42
+    ld [hli], a
+    ld a, $42
+    ld [hli], a
+    ld a, $7E
+    ld [hli], a
+    ld a, $5E
+    ld [hli], a
+    ld a, $7E
+    ld [hli], a
+    ld a, $0A
+    ld [hli], a
+    ld a, $7C
+    ld [hli], a
+    ld a, $56
+    ld [hli], a
+    ld a, $38
+    ld [hli], a
+    ld a, $7C
+    ld [hli], a
+
+    ; Put tile 0 into top-left of background map ($9800)
+    ld hl, $9800
+    ld a, $00
+    ld [hl], a
+
+    ; Background palette (for contrast)
+    ld a, %11100100
+    ld [$FF47], a
+
+    ; Enable LCD:
+    ; bit7 = LCD on
+    ; bit4 = use $8000 tile data
+    ; bit0 = background on
+    ld a, %10010001
+    ld [$FF40], a
+
+Forever:
+    ld a, [$8000]   ; read from tile 0 start
+    jr Forever      ; repeat
+    "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(80000);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0x8000), 0x3C);
+        assert_hex_eq!(gb.cpu.a(), 0x3C);
     }
     // }}}
 

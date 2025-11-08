@@ -35,6 +35,13 @@ impl Memory {
         self.data = self.mem[self.addr as usize];
     }
 
+    pub fn dbg_read_16(&self, addr: u16) -> [u8; 16] {
+        let start = addr as usize;
+        self.mem[start..start + 16]
+            .try_into()
+            .expect("dbg_read_16 used out of bounds")
+    }
+
     pub fn dbg_read(&self, addr: u16) -> u8 {
         self.mem[addr as usize]
     }
@@ -43,6 +50,7 @@ impl Memory {
         let addr = self.addr();
         let data = self.data();
         match addr {
+            //            0x8000 => panic!("MEM WRITE!!!! data:{:02X}", data),
             0x0000..0x4000 => todo!("Memory write to ROM bank 00: {:04x}:{:02x}", addr, data),
             0x4000..0x8000 => todo!("Memory write to ROM bank 01-NN: {:04x}:{:02x}", addr, data),
             0x8000..0xA000 => self.mem[addr as usize] = data, // 8 KiB VRAM (GBC Bank 00-01)

@@ -80,7 +80,6 @@ impl Gameboy {
             }
             if self.cpu.halted() {
                 self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
-                println!("HALT!");
                 return;
             }
         }
@@ -99,6 +98,11 @@ impl Gameboy {
                 animate = Instant::now() + Duration::from_secs_f64(1.0 / 30.0);
             }
         }
+    }
+
+    #[allow(dead_code)]
+    fn log_status_all(&self) {
+        self.log_status(0xFF);
     }
 
     fn log_status(&self, f: u8) {
