@@ -161,21 +161,40 @@ impl Ppu {
     }
 
     //
-    pub fn tile_address_lo(&self, id: u8, y: u8) -> u16 {
-        0x8000 + ((id as u16) * 16) + ((y as u16) % 0x8) * 2
+    pub fn tile_address_lo(&self, obj: bool, id: u8, y: u8) -> u16 {
+        let lcdc = self.mem_read(LCDC);
+        if obj || lcdc & (1 << 4) != 0 {
+            0x8000 + ((id as u16) * 16) + ((y as u16) % 0x8) * 2
+        } else {
+            match id {
+                0..128 => 0x9000 + ((id as u16) * 16) + ((y as u16) % 0x8) * 2,
+                128..=255 => 0x8800 + (((id - 128) as u16) * 16) + ((y as u16) % 0x8) * 2,
+            }
+        }
     }
 
-    pub fn read_whole_tile_data(&mut self, id: u8, _bank: u8) -> TileData {
+    pub fn read_whole_tile_data(&mut self, obj: bool, id: u8, _bank: u8) -> TileData {
         // TODO: Check LCDC.4 for what tilemap to use
         // TODO: Check if PPU access to VRAM is blocked, if so return 0xFF
         if id > 0xF7 {
             panic!("Attempted to request a tile outside of the tile map");
         }
-        self.mem_read_16((id as u16) * 16 + 0x8000)
+
+        let lcdc = self.mem_read(LCDC);
+        let addr = if obj || lcdc & (1 << 4) != 0 {
+            0x8000 + ((id as u16) * 16)
+        } else {
+            match id {
+                0..128 => 0x9000 + ((id as u16) * 16),
+                128..=255 => 0x8800 + (((id - 128) as u16) * 16),
+            }
+        };
+        self.mem_read_16(addr)
     }
 
     pub fn read_tile(&mut self, x: u8, y: u8) -> u8 {
         // TODO: Need to handle windowing and tilemapping
+
         let map = 0x00;
         match map {
             0x00 => self.mem_read(0x9800 + x as u16 + (y as u16) * 32),
@@ -273,13 +292,14 @@ impl Ppu {
             Fetch::DataLo => {
                 let scy = self.mem_read(SCY);
                 let tile_row = y.wrapping_add(scy) % 8;
-                self.fetch_tile_datalo = self.mem_read(self.tile_address_lo(self.fetch_tile, tile_row));
+                self.fetch_tile_datalo =
+                    self.mem_read(self.tile_address_lo(false, self.fetch_tile, tile_row));
             }
             Fetch::DataHi => {
                 let scy = self.mem_read(SCY);
                 let tile_row = y.wrapping_add(scy) % 8;
                 self.fetch_tile_datahi =
-                    self.mem_read(self.tile_address_lo(self.fetch_tile, tile_row) + 1);
+                    self.mem_read(self.tile_address_lo(false, self.fetch_tile, tile_row) + 1);
             }
             Fetch::Push => {
                 if !self.bg_fifo.is_empty() {
