@@ -174,11 +174,7 @@ impl Ppu {
     }
 
     pub fn read_whole_tile_data(&mut self, obj: bool, id: u8, _bank: u8) -> TileData {
-        // TODO: Check LCDC.4 for what tilemap to use
         // TODO: Check if PPU access to VRAM is blocked, if so return 0xFF
-        if id > 0xF7 {
-            panic!("Attempted to request a tile outside of the tile map");
-        }
 
         let lcdc = self.mem_read(LCDC);
         let addr = if obj || lcdc & (1 << 4) != 0 {
@@ -189,7 +185,15 @@ impl Ppu {
                 128..=255 => 0x8800 + (((id - 128) as u16) * 16),
             }
         };
-        self.mem_read_16(addr)
+        let data = self.mem_read_16(addr);
+        println!(
+            "id:{:02X} tiledata: {}",
+            id,
+            data.iter()
+                .map(|b| format!(" {:02x}", b))
+                .collect::<String>()
+        );
+        data
     }
 
     pub fn read_tile(&mut self, x: u8, y: u8) -> u8 {
@@ -288,6 +292,7 @@ impl Ppu {
                 let tile_y = (bg_y / 8) % 32;
 
                 self.fetch_tile = self.read_tile(tile_x, tile_y);
+                eprintln!("fetchtile:{:02x}", self.fetch_tile);
             }
             Fetch::DataLo => {
                 let scy = self.mem_read(SCY);
