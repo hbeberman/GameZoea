@@ -64,7 +64,8 @@ impl Gameboy {
             self.timer.tick(self.t);
             self.t += 1;
             if cur != self.cpu.retired() {
-                self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
+                //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
+                self.log_status(L_CPU + L_ADJ);
             }
         }
     }

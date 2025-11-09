@@ -80,24 +80,6 @@ mod tests {
 
     // {{{ Memory Tests
     #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to ROM bank 00: 0000:ab")]
-    fn mem_rom_write() {
-        let mut gb = Gameboy::cartless_dmg();
-        gb.cpu.set_addr(0x0000);
-        gb.cpu.set_data(0xAB);
-        gb.cpu.mem_write();
-    }
-
-    #[test]
-    #[should_panic(expected = "not yet implemented: Memory write to ROM bank 01-NN: 4000:ab")]
-    fn mem_rom_bankable_write() {
-        let mut gb = Gameboy::cartless_dmg();
-        gb.cpu.set_addr(0x4000);
-        gb.cpu.set_data(0xAB);
-        gb.cpu.mem_write();
-    }
-
-    #[test]
     fn mem_write_read_vram() {
         let mut gb = Gameboy::cartless_dmg();
         gb.cpu.set_addr(0x8000);

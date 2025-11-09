@@ -1,38 +1,125 @@
+#[derive(Debug)]
+#[allow(dead_code)]
+enum Mbc {
+    None,
+    MBC1,
+    MBC2,
+    MBC3,
+    MBC5,
+    MBC6,
+    MBC7,
+    MMM01,
+    M161,
+    Huc1,
+    HuC3,
+}
+
 pub struct Memory {
+    mbc: Mbc,
     mem: [u8; 0x10000],
+    cartridge: Vec<u8>,
     data: u8,
     addr: u16,
     write_div: bool,
     write_tac: bool,
+    cartridge_type: u8,
+    rom_bank_count: u16,
+    ram_bank_count: u8,
+    ram_enable: bool,
+    mbc1rombank: u8,
+    mbc1rambank: u8,
+    mbc1bankmode: u8,
 }
 
 impl Memory {
     pub fn empty() -> Self {
         Memory {
+            mbc: Mbc::None,
             mem: [0u8; 0x10000],
+            cartridge: [0u8; 0x10000].to_vec(),
             data: 0x00,
             addr: 0x0000,
             write_div: false,
             write_tac: false,
+            cartridge_type: 0x00,
+            rom_bank_count: 0x0000,
+            ram_bank_count: 0x00,
+            ram_enable: false,
+            mbc1rombank: 0x00,
+            mbc1rambank: 0x00,
+            mbc1bankmode: 0x00,
         }
     }
 
     pub fn new(cartridge: &[u8]) -> Self {
         let mut mem = [0u8; 0x10000];
+        let (mbc, cartridge_type) = Memory::mbc_decode(cartridge);
+        let rom_bank_count = Memory::rom_bank_count_decode(cartridge);
+        let ram_bank_count = Memory::ram_bank_count_decode(cartridge);
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
+        // TODO: move the initialization of timer registers into the timer init code
         mem[0xFF05] = 0x00; // TIMA initial value after DMG boot ROM
         mem[0xFF07] = 0xF8; // TAC initial value after DMG boot ROM
-        Memory {
+        let mem = Memory {
+            mbc,
             mem,
+            cartridge: cartridge.to_vec(),
             data: 0x00,
             addr: 0x0000,
             write_div: false,
             write_tac: false,
+            cartridge_type,
+            rom_bank_count,
+            ram_bank_count,
+            ram_enable: false,
+            mbc1rombank: 0x00,
+            mbc1rambank: 0x00,
+            mbc1bankmode: 0x00,
+        };
+        eprintln!(
+            "MEM: rom_bank_count:#{} ram_bank_count:#{} mbc:{:?}",
+            mem.rom_bank_count, mem.ram_bank_count, mem.mbc
+        );
+        mem
+    }
+
+    fn mbc_decode(cartridge: &[u8]) -> (Mbc, u8) {
+        let cartridge_type = cartridge[0x147];
+        let mbc = match cartridge_type {
+            0x00 => Mbc::None,
+            0x01..=0x03 => Mbc::MBC1,
+            x => todo!("MBC {:02X} not implemented!", x),
+        };
+        eprintln!("MBC {:?} found", mbc);
+        (mbc, cartridge_type)
+    }
+
+    fn rom_bank_count_decode(cartridge: &[u8]) -> u16 {
+        let val = cartridge[0x0148];
+        match val {
+            0x00..=0x08 => 0b1 << (val + 1),
+            x => panic!("Invalid rom size value:{:02X}", x),
+        }
+    }
+
+    fn ram_bank_count_decode(cartridge: &[u8]) -> u8 {
+        let val = cartridge[0x0149];
+        match val {
+            0x00 => 0,
+            0x02 => 1,
+            0x03 => 4,
+            0x04 => 16,
+            0x05 => 8,
+            x => panic!("Invalid ram size value:{:02X}", x),
         }
     }
 
     pub fn read(&mut self) {
-        self.data = self.mem[self.addr as usize];
+        self.data = match self.addr {
+            0x0000..=0x7FFF => self.mbc_read(),
+            0xA000..=0xBFFF => self.mbc_read(),
+            _ => self.mem[self.addr as usize],
+        }
     }
 
     pub fn dbg_read_16(&self, addr: u16) -> [u8; 16] {
@@ -50,9 +137,8 @@ impl Memory {
         let addr = self.addr();
         let data = self.data();
         match addr {
-            //            0x8000 => panic!("MEM WRITE!!!! data:{:02X}", data),
-            0x0000..0x4000 => todo!("Memory write to ROM bank 00: {:04x}:{:02x}", addr, data),
-            0x4000..0x8000 => todo!("Memory write to ROM bank 01-NN: {:04x}:{:02x}", addr, data),
+            // 0x8000 => panic!("MEM WRITE!!!! data:{:02X}", data),
+            0x0000..0x8000 => self.mbc_rom_write(),
             0x8000..0xA000 => self.mem[addr as usize] = data, // 8 KiB VRAM (GBC Bank 00-01)
             0xA000..0xC000 => self.mem[addr as usize] = data, // 8 KiB External RAM
             0xC000..0xD000 => self.mem[addr as usize] = data, // 4 KiB Work RAM
@@ -110,5 +196,69 @@ impl Memory {
         let result = self.write_tac;
         self.write_tac = false;
         result
+    }
+
+    pub fn mbc_rom_write(&mut self) {
+        match &self.mbc {
+            Mbc::None => panic!("Attempted to write to rom on MBC None"),
+            Mbc::MBC1 => self.mbc1_register_write(),
+            x => todo!(
+                "ROM write on unimplemented MBC:{:?} addr:{:04X}",
+                x,
+                self.addr
+            ),
+        }
+    }
+
+    pub fn mbc1_register_write(&mut self) {
+        match self.addr {
+            0x0000..=0x1FFF => self.ram_enable = self.data & 0x0A == 0x0A,
+            0x2000..=0x3FFF => self.mbc1rombank = self.data & 0x1F,
+            0x4000..=0x5FFF => self.mbc1rambank = self.data & 0x3,
+            0x6000..=0x7FFF => self.mbc1bankmode = self.data & 0x1,
+            _ => unreachable!("Invalid addr:{:04X} for MBC1 write", self.addr),
+        }
+    }
+
+    pub fn mbc_read(&mut self) -> u8 {
+        match &self.mbc {
+            Mbc::None => self.mem[self.addr as usize],
+            Mbc::MBC1 => self.mbc1_read(),
+            x => todo!("Read on unimplemented MBC:{:?} addr:{:04X}", x, self.addr),
+        }
+    }
+
+    pub fn mbc1_read(&mut self) -> u8 {
+        let addr = match self.addr {
+            0x0000..=0x3FFF => {
+                ((self.addr as usize) & 0x3F)
+                    | if self.mbc1bankmode == 0x01 {
+                        (self.mbc1rambank as usize) << 19
+                    } else {
+                        0
+                    }
+            }
+            0x4000..=0x7FFF => {
+                ((self.addr as usize) & 0x3F)
+                    | ((self.mbc1rombank as usize) << 14)
+                    | ((self.mbc1rambank as usize) << 19)
+            }
+            0xA000..=0xBFFF => {
+                ((self.addr as usize) & 0x3F)
+                    | if self.mbc1bankmode == 0x01 {
+                        (self.mbc1rambank as usize) << 13
+                    } else {
+                        0
+                    }
+            }
+            _ => unreachable!("Invalid mbc1 read decode addr:{:04X}", self.addr),
+        };
+
+        let data = self.cartridge[addr];
+        eprintln!(
+            "MBC1_read addr:{:04X} cartaddr:{:04X} data:{:02X}",
+            self.addr, addr, data
+        );
+        data
     }
 }
