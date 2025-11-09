@@ -6,7 +6,7 @@ use std::{env, fs, process, thread};
 const DEFAULT_SCALE: u32 = 1;
 
 fn main() {
-    let (scale, rom) = parse_args();
+    let (scale, rom, steps) = parse_args();
 
     println!("GameZoea!");
     let rom_path = match rom {
@@ -36,19 +36,20 @@ fn main() {
     let rom_data = rom_bytes.into_boxed_slice();
 
     if scale == 0 {
-        run_headless(rom_data);
+        run_headless(rom_data, steps);
         return;
     }
 
     run_windowed(rom_data, scale);
 }
 
-fn parse_args() -> (u32, Option<std::path::PathBuf>) {
+fn parse_args() -> (u32, Option<std::path::PathBuf>, Option<u64>) {
     let mut args = env::args();
     let _ = args.next();
 
     let mut scale = DEFAULT_SCALE;
     let mut path = None;
+    let mut steps = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -72,6 +73,24 @@ fn parse_args() -> (u32, Option<std::path::PathBuf>) {
                             "Scale {scale} is outside the supported range 0..={}",
                             window::MAX_SCALE
                         );
+                        usage();
+                        process::exit(1);
+                    }
+                };
+            }
+
+            "--steps" => {
+                let value = args.next().unwrap_or_else(|| {
+                    eprintln!("Missing value for {arg}");
+                    usage();
+                    process::exit(1);
+                });
+
+                steps = match value.parse::<u64>() {
+                    Ok(0) => None, // 0 means run forever
+                    Ok(n) => Some(n),
+                    Err(_) => {
+                        eprintln!("Invalid steps value: {value}");
                         usage();
                         process::exit(1);
                     }
@@ -114,7 +133,7 @@ fn parse_args() -> (u32, Option<std::path::PathBuf>) {
         }
     }
 
-    (scale, path)
+    (scale, path, steps)
 }
 
 fn usage() {
@@ -123,12 +142,20 @@ fn usage() {
         window::MAX_SCALE
     );
     println!("                [--rom <rom.gb>]");
+    println!("                [--steps <number of CPU cycles to run, 0 or omitted = run forever>]");
 }
 
-fn run_headless(rom_data: Box<[u8]>) {
+fn run_headless(rom_data: Box<[u8]>, steps: Option<u64>) {
     let gameboy_thread = thread::spawn(move || {
         let mut gameboy = Gameboy::headless_dmg(&rom_data);
-        gameboy.run();
+        match steps {
+            Some(n) => {
+                for _ in 0..n {
+                    gameboy.step(1);
+                }
+            }
+            None => gameboy.run(),
+        }
     });
 
     gameboy_thread.join().unwrap();

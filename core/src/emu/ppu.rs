@@ -38,6 +38,7 @@ impl Mode {
     }
 }
 
+#[derive(Debug)]
 enum Fetch {
     Tile_,
     Tile,
@@ -82,6 +83,7 @@ pub struct Ppu {
     fetch_tile: u8,
     fetch_tile_datalo: u8,
     fetch_tile_datahi: u8,
+    lcd_was_enabled: bool, // Track LCD enable state
 }
 
 #[allow(dead_code)]
@@ -107,6 +109,7 @@ impl Ppu {
             fetch_tile: 0x00,
             fetch_tile_datalo: 0x00,
             fetch_tile_datahi: 0x00,
+            lcd_was_enabled: false,
         };
 
         ppu.mem_write(LCDC, 0x91);
@@ -137,6 +140,7 @@ impl Ppu {
             fetch_tile: 0x00,
             fetch_tile_datalo: 0x00,
             fetch_tile_datahi: 0x00,
+            lcd_was_enabled: false,
         };
 
         ppu.mem_write(LCDC, 0x91);
@@ -154,10 +158,38 @@ impl Ppu {
 
     pub fn tick(&mut self, t: u128) {
         let _ = t;
+        let lcdc = self.mem_read(LCDC);
+        let lcd_enabled = (lcdc & 0x80) != 0;
+
+        if !lcd_enabled {
+            self.lcd_was_enabled = false;
+            return;
+        }
+
+        // Detect LCD being turned on - reset PPU state
+        if !self.lcd_was_enabled {
+            self.lcd_was_enabled = true;
+            self.x = 0;
+            self.set_ly(0);
+            self.reset_fetch_pipeline();
+            // TODO: Add a 5th color for LCD off
+            for chunk in self.back_buffer.chunks_exact_mut(4) {
+                chunk.copy_from_slice(&WHITE);
+            }
+        }
 
         self.fifo_pixel_fetcher();
         self.render();
         self.update_stat();
+    }
+
+    fn reset_fetch_pipeline(&mut self) {
+        self.bg_fifo.clear();
+        self.obj_fifo.clear();
+        self.fetch_state = Fetch::Tile_;
+        self.fetch_tile = 0x00;
+        self.fetch_tile_datalo = 0x00;
+        self.fetch_tile_datahi = 0x00;
     }
 
     //
@@ -280,38 +312,39 @@ impl Ppu {
     pub fn fifo_pixel_fetcher(&mut self) {
         let x = self.x;
         let y = self.ly();
+
         match self.fetch_state {
             Fetch::Tile => {
                 let scx = self.mem_read(SCX);
                 let scy = self.mem_read(SCY);
-                // Calculate background pixel position with scroll
-                let bg_x = x.wrapping_add(scx);
+
+                let screen_x = x.wrapping_add(self.bg_fifo.len() as u8);
+                let bg_x = screen_x.wrapping_add(scx);
                 let bg_y = y.wrapping_add(scy);
-                // Convert to tile coordinates (divide by 8)
+
                 let tile_x = (bg_x / 8) % 32;
                 let tile_y = (bg_y / 8) % 32;
 
                 self.fetch_tile = self.read_tile(tile_x, tile_y);
-                eprintln!("fetchtile:{:02x}", self.fetch_tile);
             }
             Fetch::DataLo => {
                 let scy = self.mem_read(SCY);
                 let tile_row = y.wrapping_add(scy) % 8;
-                self.fetch_tile_datalo =
-                    self.mem_read(self.tile_address_lo(false, self.fetch_tile, tile_row));
+                let addr = self.tile_address_lo(false, self.fetch_tile, tile_row);
+                self.fetch_tile_datalo = self.mem_read(addr);
             }
             Fetch::DataHi => {
                 let scy = self.mem_read(SCY);
                 let tile_row = y.wrapping_add(scy) % 8;
-                self.fetch_tile_datahi =
-                    self.mem_read(self.tile_address_lo(false, self.fetch_tile, tile_row) + 1);
+                let addr = self.tile_address_lo(false, self.fetch_tile, tile_row) + 1;
+                self.fetch_tile_datahi = self.mem_read(addr);
             }
             Fetch::Push => {
                 if !self.bg_fifo.is_empty() {
                     return;
                 }
 
-                for i in 0..8 {
+                for i in (0..8).rev() {
                     let lo = (self.fetch_tile_datalo >> i) & 0x1;
                     let hi = (self.fetch_tile_datahi >> i) & 0x1;
                     let color = self.palette_decode(lo + (hi << 1));
@@ -329,9 +362,10 @@ impl Ppu {
     }
 
     pub fn render(&mut self) {
-        let pixel = match self.bg_fifo.pop() {
-            Some(pixel) => pixel,
-            None => return,
+        let pixel = if self.bg_fifo.is_empty() {
+            return;
+        } else {
+            self.bg_fifo.remove(0)
         };
 
         let index = self.x as usize + self.ly() as usize * SCREEN_WIDTH as usize;
@@ -343,6 +377,7 @@ impl Ppu {
         self.x += 1;
         if self.x == SCREEN_WIDTH as u8 {
             self.x = 0;
+            self.reset_fetch_pipeline();
             self.set_ly(self.ly() + 1);
             if self.ly() == SCREEN_HEIGHT as u8 {
                 self.set_ly(0);
