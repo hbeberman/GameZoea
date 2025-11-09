@@ -186,6 +186,7 @@ impl Mc {
 }
 // }}}
 
+#[derive(Clone, Copy)]
 pub struct Registers {
     ir: u8,
     ie: u8,
@@ -201,6 +202,8 @@ pub struct Registers {
 pub struct Cpu {
     mem: Rc<RefCell<Memory>>,
     r: Registers,
+    log_regs_prev: Registers,
+    log_regs_cur: Registers,
     ime: u8,
     cb: u8,
     mc: Mc,
@@ -431,17 +434,20 @@ impl Cpu {
             pc: 0x0100,
             wz: 0x0000, // ???
         };
+        let initial_pc = r.pc;
         Cpu {
             mem,
             r,
+            log_regs_prev: r,
+            log_regs_cur: r,
             ime: 0,
             cb: 0,
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
             retired: 0,
-            cur_pc: 0,
-            prev_pc: 0,
+            cur_pc: initial_pc,
+            prev_pc: initial_pc,
         }
     }
 
@@ -3056,6 +3062,8 @@ impl Cpu {
     }
 
     pub fn push_pc(&mut self, pc: u16) {
+        self.log_regs_prev = self.log_regs_cur;
+        self.log_regs_cur = self.r;
         self.prev_pc = self.cur_pc;
         self.cur_pc = pc;
     }
@@ -3263,7 +3271,45 @@ impl Cpu {
     pub fn set_z(&mut self, z: u8) {
         self.r.wz = self.r.wz & 0xFF00 | (z as u16)
     }
+
+    pub fn log_view(&self, adj: bool) -> CpuLogView {
+        let regs = if adj {
+            self.log_regs_prev
+        } else {
+            self.log_regs_cur
+        };
+        CpuLogView::from_registers(regs)
+    }
     // }}}
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CpuLogView {
+    pub a: u8,
+    pub f: u8,
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub h: u8,
+    pub l: u8,
+    pub sp: u16,
+}
+
+impl CpuLogView {
+    fn from_registers(regs: Registers) -> Self {
+        Self {
+            a: ((regs.af & 0xFF00) >> 8) as u8,
+            f: (regs.af & 0x00FF) as u8,
+            b: ((regs.bc & 0xFF00) >> 8) as u8,
+            c: (regs.bc & 0x00FF) as u8,
+            d: ((regs.de & 0xFF00) >> 8) as u8,
+            e: (regs.de & 0x00FF) as u8,
+            h: ((regs.hl & 0xFF00) >> 8) as u8,
+            l: (regs.hl & 0x00FF) as u8,
+            sp: regs.sp,
+        }
+    }
 }
 
 // {{{ Defaults
@@ -3284,6 +3330,8 @@ impl std::default::Default for Cpu {
         Cpu {
             mem: Rc::new(RefCell::new(Memory::new(&[]))),
             r,
+            log_regs_prev: r,
+            log_regs_cur: r,
             ime: 0,
             cb: 0,
             mc: Mc::M1,

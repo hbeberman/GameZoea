@@ -8,7 +8,6 @@ const DEFAULT_SCALE: u32 = 1;
 fn main() {
     let (scale, rom, steps) = parse_args();
 
-    println!("GameZoea!");
     let rom_path = match rom {
         Some(rom) => {
             eprintln!("Opening rom {:?}", rom.display());

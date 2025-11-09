@@ -60,6 +60,7 @@ impl Memory {
         // TODO: move the initialization of timer registers into the timer init code
         mem[0xFF05] = 0x00; // TIMA initial value after DMG boot ROM
         mem[0xFF07] = 0xF8; // TAC initial value after DMG boot ROM
+        mem[0xFF00] = 0xFF; // Stub Joypad
         let mem = Memory {
             mbc,
             mem,
@@ -229,36 +230,64 @@ impl Memory {
     }
 
     pub fn mbc1_read(&mut self) -> u8 {
-        let addr = match self.addr {
-            0x0000..=0x3FFF => {
-                ((self.addr as usize) & 0x3F)
-                    | if self.mbc1bankmode == 0x01 {
-                        (self.mbc1rambank as usize) << 19
-                    } else {
-                        0
-                    }
+        match self.addr {
+            0x0000..=0x7FFF => {
+                let cart_addr = self.mbc1_rom_addr(self.addr);
+                self.cartridge[cart_addr]
             }
-            0x4000..=0x7FFF => {
-                ((self.addr as usize) & 0x3F)
-                    | ((self.mbc1rombank as usize) << 14)
-                    | ((self.mbc1rambank as usize) << 19)
-            }
-            0xA000..=0xBFFF => {
-                ((self.addr as usize) & 0x3F)
-                    | if self.mbc1bankmode == 0x01 {
-                        (self.mbc1rambank as usize) << 13
-                    } else {
-                        0
-                    }
-            }
+            0xA000..=0xBFFF => self.mem[self.addr as usize],
             _ => unreachable!("Invalid mbc1 read decode addr:{:04X}", self.addr),
-        };
+        }
+    }
 
-        let data = self.cartridge[addr];
-        eprintln!(
-            "MBC1_read addr:{:04X} cartaddr:{:04X} data:{:02X}",
-            self.addr, addr, data
-        );
-        data
+    fn mbc1_rom_addr(&self, addr: u16) -> usize {
+        let offset = (addr as usize) & 0x3FFF;
+        let bank = match addr {
+            0x0000..=0x3FFF => self.mbc1_fixed_rom_bank(),
+            0x4000..=0x7FFF => self.mbc1_switchable_rom_bank(),
+            _ => unreachable!("Invalid ROM decode addr:{:04X}", addr),
+        };
+        let rom_len = self.cartridge.len();
+        debug_assert!(rom_len > 0, "cartridge must contain data");
+        ((bank << 14) | offset) % rom_len
+    }
+
+    fn mbc1_fixed_rom_bank(&self) -> usize {
+        if self.mbc1bankmode & 0x1 == 0x1 {
+            let bank = ((self.mbc1rambank as usize) & 0x3) << 5;
+            self.mbc1_normalize_bank(bank, false)
+        } else {
+            0
+        }
+    }
+
+    fn mbc1_switchable_rom_bank(&self) -> usize {
+        let upper = if self.mbc1bankmode & 0x1 == 0x0 {
+            ((self.mbc1rambank as usize) & 0x3) << 5
+        } else {
+            0
+        };
+        let mut bank = upper | ((self.mbc1rombank as usize) & 0x1F);
+        if (bank & 0x1F) == 0 {
+            bank += 1;
+        }
+        self.mbc1_normalize_bank(bank, true)
+    }
+
+    fn mbc1_normalize_bank(&self, bank: usize, require_non_zero: bool) -> usize {
+        let total = self.mbc1_total_rom_banks();
+        if total == 0 {
+            return 0;
+        }
+        let mut bank = bank % total;
+        if require_non_zero && total > 1 && bank == 0 {
+            bank = 1;
+        }
+        bank
+    }
+
+    fn mbc1_total_rom_banks(&self) -> usize {
+        let banks = self.cartridge.len() / 0x4000;
+        if banks == 0 { 1 } else { banks }
     }
 }
