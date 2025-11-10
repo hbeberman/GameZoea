@@ -20,6 +20,7 @@ const BGP: u16 = 0xFF47;
 const WY: u16 = 0xFF4A;
 const WX: u16 = 0xFF4B; // TODO: pandocs say WX0 and WX116 are weird
 
+#[derive(Debug)]
 enum Mode {
     M0,
     M1,
@@ -79,6 +80,8 @@ pub struct Ppu {
     pub testing: usize,
     back_buffer: Vec<u8>,
     mode: Mode,
+    dot: u16,
+    dotlimit: u16,
     fetch_state: Fetch,
     fetch_tile: u8,
     fetch_tile_datalo: u8,
@@ -105,6 +108,8 @@ impl Ppu {
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
             mode: Mode::M0,
+            dot: 0x0000,
+            dotlimit: 0x0000,
             fetch_state: Fetch::Tile_,
             fetch_tile: 0x00,
             fetch_tile_datalo: 0x00,
@@ -135,8 +140,9 @@ impl Ppu {
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
             mode: Mode::M0,
+            dot: 0x0000,
+            dotlimit: 0x0000,
             fetch_state: Fetch::Tile_,
-
             fetch_tile: 0x00,
             fetch_tile_datalo: 0x00,
             fetch_tile_datahi: 0x00,
@@ -172,15 +178,109 @@ impl Ppu {
             self.x = 0;
             self.set_ly(0);
             self.reset_fetch_pipeline();
+            self.mode = Mode::M2;
+            self.dot = 80;
             // TODO: Add a 5th color for LCD off
             for chunk in self.back_buffer.chunks_exact_mut(4) {
                 chunk.copy_from_slice(&WHITE);
             }
         }
 
+        match self.mode {
+            Mode::M0 => self.hblank(),
+            Mode::M1 => self.vblank(),
+            Mode::M2 => self.oamscan(),
+            Mode::M3 => self.draw(),
+        }
+        self.update_stat();
+    }
+
+    pub fn oamscan(&mut self) {
+        self.dot -= 1;
+        if self.dot == 0 {
+            // Next mode is Drawing
+            self.mode = Mode::M3;
+            self.dot = 289;
+            //           eprintln!("Entering Drawing mode:{:?} dot:#{}", self.mode, self.dot);
+        }
+    }
+
+    pub fn hblank(&mut self) {
+        self.dot -= 1;
+        if self.dot == 0 {
+            self.x = 0;
+            let ly = self.ly() + 1;
+            self.set_ly(ly);
+            self.dot = if ly == 144 {
+                // Next mode is VBLANK
+                self.mode = Mode::M1;
+                let intflags = self.mem_read(0xFF0F) | 0x1;
+                self.mem_write(0xFF0F, intflags);
+                /*
+                                eprintln!(
+                                    "Entering VBLANK mode:{:?} dot:#{} ly:#{}",
+                                    self.mode, self.dot, ly
+                                );
+                */
+                4560
+            } else {
+                // Next mode is OAM scan
+                self.mode = Mode::M2;
+                self.reset_fetch_pipeline();
+                /*
+                                eprintln!(
+                                    "Entering OAM mode:{:?} dot:#{} ly:#{}",
+                                    self.mode, self.dot, ly
+                                );
+                */
+                80
+            };
+        }
+    }
+
+    pub fn draw(&mut self) {
         self.fifo_pixel_fetcher();
         self.render();
-        self.update_stat();
+        self.dot -= 1;
+        if u32::from(self.x) >= SCREEN_WIDTH {
+            self.mode = Mode::M0;
+            self.dot = 204;
+            //eprintln!("Entering HBLANK mode:{:?} dot:#{}", self.mode, self.dot);
+        }
+    }
+
+    pub fn vblank(&mut self) {
+        self.dot -= 1;
+        if self.dot == 0 {
+            // Next mode is OAM
+            self.mode = Mode::M2;
+            self.dot = 80;
+            self.set_ly(0);
+            self.x = 0;
+            self.reset_fetch_pipeline();
+            let Some(frame_tx) = &self.frame_tx else {
+                return;
+            };
+
+            if let Err(err) = frame_tx.send(self.back_buffer.clone()) {
+                eprintln!("failed to deliver frame: {err}");
+            }
+            //eprintln!("Entering OAM mode:{:?} dot:#{}", self.mode, self.dot);
+        }
+    }
+
+    pub fn render(&mut self) {
+        let pixel = if self.bg_fifo.is_empty() {
+            return;
+        } else {
+            self.bg_fifo.remove(0)
+        };
+
+        let index = self.x as usize + self.ly() as usize * SCREEN_WIDTH as usize;
+        if let Some(target) = self.back_buffer.get_mut((index * 4)..((index + 1) * 4)) {
+            target.copy_from_slice(&Ppu::get_color(pixel.color));
+        }
+        self.x += 1;
     }
 
     fn reset_fetch_pipeline(&mut self) {
@@ -359,43 +459,6 @@ impl Ppu {
             _ => (),
         }
         self.fetch_state = self.fetch_state.next();
-    }
-
-    pub fn render(&mut self) {
-        let pixel = if self.bg_fifo.is_empty() {
-            return;
-        } else {
-            self.bg_fifo.remove(0)
-        };
-
-        let index = self.x as usize + self.ly() as usize * SCREEN_WIDTH as usize;
-        if let Some(target) = self.back_buffer.get_mut((index * 4)..((index + 1) * 4)) {
-            target.copy_from_slice(&Ppu::get_color(pixel.color));
-        }
-
-        let mut frame_complete = false;
-        self.x += 1;
-        if self.x == SCREEN_WIDTH as u8 {
-            self.x = 0;
-            self.reset_fetch_pipeline();
-            self.set_ly(self.ly() + 1);
-            if self.ly() == SCREEN_HEIGHT as u8 {
-                self.set_ly(0);
-                frame_complete = true;
-            }
-        }
-
-        if !frame_complete {
-            return;
-        }
-
-        let Some(frame_tx) = &self.frame_tx else {
-            return;
-        };
-
-        if let Err(err) = frame_tx.send(self.back_buffer.clone()) {
-            eprintln!("failed to deliver frame: {err}");
-        }
     }
 
     pub fn get_color(index: u8) -> [u8; 4] {
