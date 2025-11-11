@@ -6,10 +6,10 @@ macro_rules! assert_hex_eq {
     };
 }
 
-    // {{{ test vram_writes
-    #[test]
-    fn vram_writes() {
-        const ROM: &[u8] = gbasm! {r#"
+// {{{ test vram_writes
+#[test]
+fn vram_writes() {
+    const ROM: &[u8] = gbasm! {r#"
     ; Disable LCD so VRAM can be safely written
     ld a, [$FF40]
     res 7, a
@@ -46,21 +46,21 @@ Forever:
     ld a, [$8000]   ; read from tile 0 start
     jr Forever      ; repeat
     "#};
-        let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(80000);
-        assert_hex_eq!(gb.cpu.mem_dbg_read(0x8000), 0x3C);
-        assert_hex_eq!(gb.cpu.a(), 0x3C);
-        let td = gb.ppu.read_whole_tile_data(false, 0x00,0x00);
-        assert_hex_eq!(td[0], 0x3C);
-        assert_hex_eq!(td[1], 0x7E);
-        assert_hex_eq!(td[2], 0x42);
-        assert_hex_eq!(td[3], 0x42);
-    }
+    let mut gb = Gameboy::headless_dmg(ROM);
+    gb.step(80000);
+    assert_hex_eq!(gb.cpu.mem_dbg_read(0x8000), 0x3C);
+    assert_hex_eq!(gb.cpu.a(), 0x3C);
+    let td = gb.ppu.read_whole_tile_data(false, 0x00, 0x00);
+    assert_hex_eq!(td[0], 0x3C);
+    assert_hex_eq!(td[1], 0x7E);
+    assert_hex_eq!(td[2], 0x42);
+    assert_hex_eq!(td[3], 0x42);
+}
 
-    // {{{ test ppu_tile_read_lcdc4
-    #[test]
-    fn ppu_tile_read_lcdc4() {
-        const ROM: &[u8] = gbasm! {r#"
+// {{{ test ppu_tile_read_lcdc4
+#[test]
+fn ppu_tile_read_lcdc4() {
+    const ROM: &[u8] = gbasm! {r#"
   def rLCDC equ $FF40
   def rBGP equ $FF47
   ; Disable LCD before writing VRAM
@@ -158,28 +158,28 @@ TileHollow:
   db $FF,$22,$81,$FF,$81,$00,$81,$00
   db $81,$00,$81,$00,$81,$00,$FF,$00
     "#};
-        let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(80000);
-        let td = gb.ppu.read_whole_tile_data(false, 0x00,0x00);
-        assert_hex_eq!(td[0], 0xFF);
-        assert_hex_eq!(td[1], 0x00);
-        assert_hex_eq!(td[2], 0xFF);
-        assert_hex_eq!(td[3], 0x00);
-        let td = gb.ppu.read_whole_tile_data(false, 0x01,0x00);
-        assert_hex_eq!(td[0], 0xAA);
-        assert_hex_eq!(td[1], 0x55);
-        assert_hex_eq!(td[2], 0x55);
-        assert_hex_eq!(td[3], 0xAA);
-        let td = gb.ppu.read_whole_tile_data(false, 0xFF,0x00);
-        assert_hex_eq!(td[0], 0xFF);
-        assert_hex_eq!(td[1], 0x22);
-        assert_hex_eq!(td[2], 0x81);
-        assert_hex_eq!(td[3], 0xFF);
-    }
+    let mut gb = Gameboy::headless_dmg(ROM);
+    gb.step(80000);
+    let td = gb.ppu.read_whole_tile_data(false, 0x00, 0x00);
+    assert_hex_eq!(td[0], 0xFF);
+    assert_hex_eq!(td[1], 0x00);
+    assert_hex_eq!(td[2], 0xFF);
+    assert_hex_eq!(td[3], 0x00);
+    let td = gb.ppu.read_whole_tile_data(false, 0x01, 0x00);
+    assert_hex_eq!(td[0], 0xAA);
+    assert_hex_eq!(td[1], 0x55);
+    assert_hex_eq!(td[2], 0x55);
+    assert_hex_eq!(td[3], 0xAA);
+    let td = gb.ppu.read_whole_tile_data(false, 0xFF, 0x00);
+    assert_hex_eq!(td[0], 0xFF);
+    assert_hex_eq!(td[1], 0x22);
+    assert_hex_eq!(td[2], 0x81);
+    assert_hex_eq!(td[3], 0xFF);
+}
 
-    #[test]
-    fn ppu_tile_numbers() {
-        const ROM: &[u8] = gbasm! {r#"
+#[test]
+fn ppu_tile_numbers() {
+    const ROM: &[u8] = gbasm! {r#"
   def rLCDC equ $FF40
   def rBGP equ $FF47
   ; Disable LCD for VRAM writes
@@ -297,26 +297,124 @@ Tiles:
   db $60,$00,$60,$00,$60,$00,$60,$00
 TilesEnd:
     "#};
-        let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(80000);
-        let td = gb.ppu.read_whole_tile_data(false, 0x00,0x00);
-        assert_hex_eq!(td[0], 0x00);
-        assert_hex_eq!(td[1], 0x00);
-        assert_hex_eq!(td[2], 0x00);
-        assert_hex_eq!(td[3], 0x00);
-        let td = gb.ppu.read_whole_tile_data(false, 0x01,0x00);
-        assert_hex_eq!(td[0], 0x18);
-        assert_hex_eq!(td[1], 0x00);
-        assert_hex_eq!(td[2], 0x38);
-        assert_hex_eq!(td[3], 0x00);
-        let td = gb.ppu.read_whole_tile_data(false, 0x02,0x00);
-        assert_hex_eq!(td[0], 0x3C);
-        assert_hex_eq!(td[1], 0x00);
-        assert_hex_eq!(td[2], 0x66);
-        assert_hex_eq!(td[3], 0x00);
-        assert_hex_eq!(gb.cpu.mem_dbg_read(0x9800), 0x01);
-        assert_hex_eq!(gb.cpu.mem_dbg_read(0x9801), 0x02);
+    let mut gb = Gameboy::headless_dmg(ROM);
+    gb.step(80000);
+    let td = gb.ppu.read_whole_tile_data(false, 0x00, 0x00);
+    assert_hex_eq!(td[0], 0x00);
+    assert_hex_eq!(td[1], 0x00);
+    assert_hex_eq!(td[2], 0x00);
+    assert_hex_eq!(td[3], 0x00);
+    let td = gb.ppu.read_whole_tile_data(false, 0x01, 0x00);
+    assert_hex_eq!(td[0], 0x18);
+    assert_hex_eq!(td[1], 0x00);
+    assert_hex_eq!(td[2], 0x38);
+    assert_hex_eq!(td[3], 0x00);
+    let td = gb.ppu.read_whole_tile_data(false, 0x02, 0x00);
+    assert_hex_eq!(td[0], 0x3C);
+    assert_hex_eq!(td[1], 0x00);
+    assert_hex_eq!(td[2], 0x66);
+    assert_hex_eq!(td[3], 0x00);
+    assert_hex_eq!(gb.cpu.mem_dbg_read(0x9800), 0x01);
+    assert_hex_eq!(gb.cpu.mem_dbg_read(0x9801), 0x02);
+}
+
+#[test]
+fn ppu_line_progression() {
+    use gamezoea::emu::gb::Gameboy;
+
+    let mut gb = Gameboy::cartless_dmg();
+
+    // start of frame
+    assert_eq!(gb.ppu.ly(), 0);
+
+    // one scanline is 456 dots
+    gb.tick(456);
+    assert_eq!(gb.ppu.ly(), 1);
+
+    // advance to line 10
+    gb.tick(456 * 9);
+    assert_eq!(gb.ppu.ly(), 10);
+
+    // reach start of VBlank (line 144)
+    gb.tick(456 * 134);
+    assert_eq!(gb.ppu.ly(), 144);
+
+    for expected in 145..=153 {
+        gb.tick(456);
+        assert_eq!(gb.ppu.ly(), expected);
     }
 
+    gb.tick(456);
+    assert_eq!(gb.ppu.ly(), 0);
+}
 
-    // }}}
+// {{{ test ppu_timing
+#[test]
+fn ppu_timing() {
+    const ROM: &[u8] = gbasm! {r#"
+; === Register addresses ===
+DEF rIF  = $FF0F     ; Interrupt Flag
+DEF rIE  = $FFFF     ; Interrupt Enable
+; === RAM variables ===
+DEF vblank_counter = $C000  ; counter in WRAM
+
+    di
+    xor a
+    ld [rIF], a              ; clear any pending interrupts
+    ld [vblank_counter], a   ; reset VBlank counter
+    ld a, 1
+    ld [rIE], a              ; enable only VBlank interrupt (bit0)
+    ei                       ; enable interrupts globally
+
+MainLoop:
+    halt                     ; wait for next VBlank interrupt
+    ld a, [vblank_counter]
+    cp 20
+    jr c, .active
+    halt                     ; once 20 reached, sleep forever
+    jr .halted
+
+.active:
+    inc de                   ; DE keeps running freely
+    jr MainLoop
+
+.halted:
+    jr .halted                ; permanent sleep once done
+
+
+; === Interrupt Vectors ===
+SECTION "InterruptVectors", ROM0[$40]
+    jp VBlankHandler
+
+
+VBlankHandler:
+    push af
+    push hl
+
+    ; acknowledge VBlank interrupt
+    ld a, 1
+    ld [rIF], a
+
+    ; increment counter
+    ld hl, vblank_counter
+    ld a, [hl]
+    inc a
+    ld [hl], a
+
+    ; after 20 vblanks, mask further VBlank interrupts
+    cp 20
+    jr c, .done
+    ld a, 0
+    ld [rIE], a               ; disable VBlank
+.done:
+    pop hl
+    pop af
+    reti
+    "#};
+    let mut gb = Gameboy::headless_dmg(ROM);
+    gb.tick(2000000);
+    assert_hex_eq!(gb.cpu.de(), 0x00D8);
+}
+// }}}
+
+// }}}

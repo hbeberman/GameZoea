@@ -29,6 +29,15 @@ enum Mode {
 }
 
 impl Mode {
+    fn bits(&self) -> u8 {
+        match self {
+            Mode::M0 => 0,
+            Mode::M1 => 1,
+            Mode::M2 => 2,
+            Mode::M3 => 3,
+        }
+    }
+
     fn next(&self) -> Self {
         match self {
             Mode::M0 => Mode::M1,
@@ -179,6 +188,7 @@ impl Ppu {
             self.set_ly(0);
             self.reset_fetch_pipeline();
             self.mode = Mode::M2;
+            self.set_mode(self.mode.bits());
             self.dot = 80;
             // TODO: Add a 5th color for LCD off
             for chunk in self.back_buffer.chunks_exact_mut(4) {
@@ -200,6 +210,7 @@ impl Ppu {
         if self.dot == 0 {
             // Next mode is Drawing
             self.mode = Mode::M3;
+            self.set_mode(self.mode.bits());
             self.dot = 289;
             //           eprintln!("Entering Drawing mode:{:?} dot:#{}", self.mode, self.dot);
         }
@@ -214,6 +225,7 @@ impl Ppu {
             self.dot = if ly == 144 {
                 // Next mode is VBLANK
                 self.mode = Mode::M1;
+                self.set_mode(self.mode.bits());
                 let intflags = self.mem_read(0xFF0F) | 0x1;
                 self.mem_write(0xFF0F, intflags);
                 /*
@@ -226,6 +238,7 @@ impl Ppu {
             } else {
                 // Next mode is OAM scan
                 self.mode = Mode::M2;
+                self.set_mode(self.mode.bits());
                 self.reset_fetch_pipeline();
                 /*
                                 eprintln!(
@@ -244,7 +257,8 @@ impl Ppu {
         self.dot -= 1;
         if u32::from(self.x) >= SCREEN_WIDTH {
             self.mode = Mode::M0;
-            self.dot = 204;
+            self.set_mode(self.mode.bits());
+            self.dot = 87 + self.dot;
             //eprintln!("Entering HBLANK mode:{:?} dot:#{}", self.mode, self.dot);
         }
     }
@@ -252,18 +266,25 @@ impl Ppu {
     pub fn vblank(&mut self) {
         self.dot -= 1;
         if self.dot == 0 {
-            // Next mode is OAM
-            self.mode = Mode::M2;
-            self.dot = 80;
-            self.set_ly(0);
-            self.x = 0;
-            self.reset_fetch_pipeline();
-            let Some(frame_tx) = &self.frame_tx else {
-                return;
-            };
+            let ly = self.ly();
+            if ly >= 153 {
+                // Next mode is OAM
+                self.mode = Mode::M2;
+                self.set_mode(self.mode.bits());
+                self.dot = 80;
+                self.set_ly(0);
+                self.x = 0;
+                self.reset_fetch_pipeline();
+                let Some(frame_tx) = &self.frame_tx else {
+                    return;
+                };
 
-            if let Err(err) = frame_tx.send(self.back_buffer.clone()) {
-                eprintln!("failed to deliver frame: {err}");
+                if let Err(err) = frame_tx.send(self.back_buffer.clone()) {
+                    eprintln!("failed to deliver frame: {err}");
+                }
+            } else {
+                self.set_ly(ly.wrapping_add(1));
+                self.dot = 456;
             }
             //eprintln!("Entering OAM mode:{:?} dot:#{}", self.mode, self.dot);
         }
@@ -362,11 +383,13 @@ impl Ppu {
     }
 
     pub fn set_mode(&mut self, mode: u8) {
-        self.mem_write(0xFF41, (self.mode() & 0xFC) & (mode & 0x3))
+        let mut stat = self.mem_read(STAT);
+        stat = (stat & 0xFC) | (mode & 0x3);
+        self.mem_write(STAT, stat);
     }
 
     pub fn mode(&self) -> u8 {
-        self.mem_read(0xFF41 & 0x3)
+        self.mem_read(STAT) & 0x3
     }
 
     pub fn ly(&self) -> u8 {
@@ -440,7 +463,7 @@ impl Ppu {
                 self.fetch_tile_datahi = self.mem_read(addr);
             }
             Fetch::Push => {
-                if !self.bg_fifo.is_empty() {
+                if self.bg_fifo.len() > 8 {
                     return;
                 }
 
