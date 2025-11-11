@@ -144,8 +144,8 @@ impl Memory {
             0xA000..0xC000 => self.mem[addr as usize] = data, // 8 KiB External RAM
             0xC000..0xD000 => self.mem[addr as usize] = data, // 4 KiB Work RAM
             0xD000..0xE000 => self.mem[addr as usize] = data, // 4 KiB Work RAM (GBC Bank 01-07)
-            0xE000..0xFE00 => panic!("Memory write to echo RAM: {:04x}:{:02x}", addr, data),
-            0xFE00..0xFEA0 => todo!("Memory write to OAM: {:04x}:{:02x}", addr, data),
+            0xE000..0xFE00 => self.mem[(addr & 0x3FFF) as usize] = data, // Echo Ram
+            0xFE00..0xFEA0 => self.write_oam(addr, data),
             0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
             0xFF04 => {
                 self.mem[addr as usize] = 0;
@@ -197,6 +197,10 @@ impl Memory {
         let result = self.write_tac;
         self.write_tac = false;
         result
+    }
+
+    pub fn write_oam(&mut self, addr: u16, data: u8) {
+        self.mem[addr as usize] = data // 4 KiB Work RAM (GBC Bank 01-07)
     }
 
     pub fn mbc_rom_write(&mut self) {

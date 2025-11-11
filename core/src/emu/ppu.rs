@@ -1,5 +1,6 @@
 use crate::app::window::{FrameSender, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emu::mem::Memory;
+use crate::{bit, clearbit, isbitset, setbit};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -10,6 +11,7 @@ pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
 const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
 
+const IFLAG: u16 = 0xFF0F;
 const LCDC: u16 = 0xFF40;
 const STAT: u16 = 0xFF41;
 const SCY: u16 = 0xFF42;
@@ -20,7 +22,7 @@ const BGP: u16 = 0xFF47;
 const WY: u16 = 0xFF4A;
 const WX: u16 = 0xFF4B; // TODO: pandocs say WX0 and WX116 are weird
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 enum Mode {
     M0,
     M1,
@@ -95,7 +97,8 @@ pub struct Ppu {
     fetch_tile: u8,
     fetch_tile_datalo: u8,
     fetch_tile_datahi: u8,
-    lcd_was_enabled: bool, // Track LCD enable state
+    lcd_was_enabled: bool, // Track LCD emut nable state
+    already_interrupted: bool,
 }
 
 #[allow(dead_code)]
@@ -124,6 +127,7 @@ impl Ppu {
             fetch_tile_datalo: 0x00,
             fetch_tile_datahi: 0x00,
             lcd_was_enabled: false,
+            already_interrupted: false,
         };
 
         ppu.mem_write(LCDC, 0x91);
@@ -156,6 +160,7 @@ impl Ppu {
             fetch_tile_datalo: 0x00,
             fetch_tile_datahi: 0x00,
             lcd_was_enabled: false,
+            already_interrupted: false,
         };
 
         ppu.mem_write(LCDC, 0x91);
@@ -188,7 +193,6 @@ impl Ppu {
             self.set_ly(0);
             self.reset_fetch_pipeline();
             self.mode = Mode::M2;
-            self.set_mode(self.mode.bits());
             self.dot = 80;
             // TODO: Add a 5th color for LCD off
             for chunk in self.back_buffer.chunks_exact_mut(4) {
@@ -196,11 +200,16 @@ impl Ppu {
             }
         }
 
-        match self.mode {
+        let mode = self.mode.clone();
+        match mode {
             Mode::M0 => self.hblank(),
             Mode::M1 => self.vblank(),
             Mode::M2 => self.oamscan(),
             Mode::M3 => self.draw(),
+        }
+        if mode != self.mode {
+            self.set_mode(self.mode.bits());
+            self.check_interrupt();
         }
         self.update_stat();
     }
@@ -210,7 +219,6 @@ impl Ppu {
         if self.dot == 0 {
             // Next mode is Drawing
             self.mode = Mode::M3;
-            self.set_mode(self.mode.bits());
             self.dot = 289;
             //           eprintln!("Entering Drawing mode:{:?} dot:#{}", self.mode, self.dot);
         }
@@ -225,27 +233,25 @@ impl Ppu {
             self.dot = if ly == 144 {
                 // Next mode is VBLANK
                 self.mode = Mode::M1;
-                self.set_mode(self.mode.bits());
-                let intflags = self.mem_read(0xFF0F) | 0x1;
-                self.mem_write(0xFF0F, intflags);
                 /*
                                 eprintln!(
                                     "Entering VBLANK mode:{:?} dot:#{} ly:#{}",
                                     self.mode, self.dot, ly
                                 );
                 */
+                let intflags = self.mem_read(IFLAG) | 0x1;
+                self.mem_write(0xFF0F, intflags);
                 4560
             } else {
                 // Next mode is OAM scan
                 self.mode = Mode::M2;
-                self.set_mode(self.mode.bits());
-                self.reset_fetch_pipeline();
                 /*
                                 eprintln!(
                                     "Entering OAM mode:{:?} dot:#{} ly:#{}",
                                     self.mode, self.dot, ly
                                 );
                 */
+                self.reset_fetch_pipeline();
                 80
             };
         }
@@ -257,9 +263,8 @@ impl Ppu {
         self.dot -= 1;
         if u32::from(self.x) >= SCREEN_WIDTH {
             self.mode = Mode::M0;
-            self.set_mode(self.mode.bits());
-            self.dot = 87 + self.dot;
             //eprintln!("Entering HBLANK mode:{:?} dot:#{}", self.mode, self.dot);
+            self.dot += 87;
         }
     }
 
@@ -270,7 +275,7 @@ impl Ppu {
             if ly >= 153 {
                 // Next mode is OAM
                 self.mode = Mode::M2;
-                self.set_mode(self.mode.bits());
+                //eprintln!("Entering OAM mode:{:?} dot:#{}", self.mode, self.dot);
                 self.dot = 80;
                 self.set_ly(0);
                 self.x = 0;
@@ -286,7 +291,6 @@ impl Ppu {
                 self.set_ly(ly.wrapping_add(1));
                 self.dot = 456;
             }
-            //eprintln!("Entering OAM mode:{:?} dot:#{}", self.mode, self.dot);
         }
     }
 
@@ -316,7 +320,7 @@ impl Ppu {
     //
     pub fn tile_address_lo(&self, obj: bool, id: u8, y: u8) -> u16 {
         let lcdc = self.mem_read(LCDC);
-        if obj || lcdc & (1 << 4) != 0 {
+        if obj || isbitset!(lcdc, 4) {
             0x8000 + ((id as u16) * 16) + ((y as u16) % 0x8) * 2
         } else {
             match id {
@@ -330,7 +334,7 @@ impl Ppu {
         // TODO: Check if PPU access to VRAM is blocked, if so return 0xFF
 
         let lcdc = self.mem_read(LCDC);
-        let addr = if obj || lcdc & (1 << 4) != 0 {
+        let addr = if obj || isbitset!(lcdc, 4) {
             0x8000 + ((id as u16) * 16)
         } else {
             match id {
@@ -412,23 +416,33 @@ impl Ppu {
         self.mem_read(0xFF41)
     }
 
-    pub fn set_stat_bit(&mut self, lyc: u8) {
-        let mut stat = self.mem_read(0xFF41);
-        stat &= 0x1 << lyc;
-        self.mem_write(STAT, stat)
-    }
-
-    pub fn clear_stat_bit(&mut self, lyc: u8) {
-        let mut stat = self.mem_read(0xFF41);
-        stat &= !(0x1 << lyc);
-        self.mem_write(STAT, stat)
-    }
-
     pub fn update_stat(&mut self) {
+        let mut stat = self.mem_read(STAT);
         if self.ly() == self.lyc() {
-            self.set_stat_bit(2);
+            stat &= bit!(2);
         } else {
-            self.clear_stat_bit(2);
+            stat &= !(bit!(2));
+        }
+        self.mem_write(STAT, stat);
+    }
+
+    pub fn check_interrupt(&mut self) {
+        let stat = self.mem_read(STAT);
+        let hit = match self.mode {
+            Mode::M0 => isbitset!(stat, 2),
+            Mode::M1 => isbitset!(stat, 3),
+            Mode::M2 => isbitset!(stat, 4),
+            Mode::M3 => isbitset!(stat, 5),
+        };
+        if hit {
+            if !self.already_interrupted {
+                self.already_interrupted = true;
+                let mut reg_if = self.mem_read(IFLAG);
+                setbit!(reg_if, 2);
+                self.mem_write(IFLAG, reg_if);
+            }
+        } else {
+            self.already_interrupted = false;
         }
     }
 

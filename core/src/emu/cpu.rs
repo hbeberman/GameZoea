@@ -212,6 +212,7 @@ pub struct Cpu {
     retired: u64,
     cur_pc: u16,
     prev_pc: u16,
+    dbg_break: u8,
 }
 
 impl Cpu {
@@ -448,6 +449,7 @@ impl Cpu {
             retired: 0,
             cur_pc: initial_pc,
             prev_pc: initial_pc,
+            dbg_break: 0,
         }
     }
 
@@ -1042,6 +1044,9 @@ impl Cpu {
                 let r8_source = self.r8_operand();
                 let r8_dest = R8::from((self.ir() & M543) >> 3);
                 self.set_r8(r8_dest, self.r8(r8_source));
+                if r8_source == r8_dest && r8_source == R8::B {
+                    self.dbg_break += 1;
+                }
                 self.fetch_next();
             }
             M0 => self.set_mc(M2),
@@ -2799,6 +2804,9 @@ impl Cpu {
 
     // {{{ Cycle Functions
     pub fn tick(&mut self, t: u128) {
+        if self.dbg_break >= 2 {
+            panic!("Mooneye break!");
+        }
         if t.is_multiple_of(4) {
             if !self.halted {
                 self.execute();
@@ -3157,7 +3165,7 @@ impl Cpu {
     }
 
     pub fn set_af(&mut self, af: u16) {
-        self.r.af = af
+        self.r.af = af & 0xF0
     }
 
     pub fn set_a(&mut self, a: u8) {
@@ -3340,6 +3348,7 @@ impl std::default::Default for Cpu {
             retired: 0,
             cur_pc: 0,
             prev_pc: 0,
+            dbg_break: 0,
         }
     }
 }
