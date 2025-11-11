@@ -1163,7 +1163,7 @@ SkipIncA:
         assert_hex_eq!(gb.cpu.bc(), 0x1A2B);
         assert_hex_eq!(gb.cpu.de(), 0x1A2B);
         assert_hex_eq!(gb.cpu.hl(), 0x1A2B);
-        assert_hex_eq!(gb.cpu.af(), 0x1A2B);
+        assert_hex_eq!(gb.cpu.af(), 0x1A20);
     }
     // }}}
 
@@ -1857,6 +1857,58 @@ TimerHandler:
         let mut gb = Gameboy::headless_dmg(ROM);
         gb.step(20000);
         assert_hex_eq!(gb.cpu.de(), 0x00CB);
+    }
+    // }}}
+
+    // {{{ test mooneye_print_hex8
+    #[test]
+    fn mooneye_print_hex8() {
+        const ROM: &[u8] = gbasm! {r#"
+xor a
+ld hl, 0xC000
+ld [hl+], a
+ld [hl+], a
+ld hl, 0xC000
+ld a, 0x32
+call print_hex8
+halt
+halt
+
+print_hex8:
+  push af
+  push af
+  swap a
+  call print_hex4
+  pop af
+  pop bc
+  jp print_hex4_again
+
+print_hex4:
+  and a, 0x0f
+  cp a, 0x0a
+  jr c, h4skip
+  add a, 0x07
+  h4skip:
+  add a, 0x30
+  ld [hl+], a
+  ret
+
+print_hex4_again:
+  and a, 0x0f
+  cp a, 0x0a
+  jr c, h4skip2
+  add a, 0x07
+  h4skip2:
+  add a, 0x30
+  ld [hl+], a
+  ret
+    "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(20000);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFB), 0x32);
+        //        assert_hex_eq!(gb.cpu.af(), 0x0032);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x33);
+        assert_hex_eq!(gb.cpu.mem_dbg_read(0xC001), 0x32);
     }
     // }}}
 

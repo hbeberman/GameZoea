@@ -3165,7 +3165,7 @@ impl Cpu {
     }
 
     pub fn set_af(&mut self, af: u16) {
-        self.r.af = af & 0xF0
+        self.r.af = af & 0xFFF0
     }
 
     pub fn set_a(&mut self, a: u8) {

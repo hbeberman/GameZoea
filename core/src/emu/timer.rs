@@ -25,7 +25,7 @@ impl Timer {
 
         let mut timer = Timer {
             mem,
-            system_counter: 0,
+            system_counter: 0xAC << 6,
             internal_tma,
             prev_signal: false,
             last_tac,
@@ -73,7 +73,7 @@ impl Timer {
             let tac = self.mem_read(TAC);
             let signal_before = self.timer_signal(self.system_counter, tac);
             self.system_counter = 0;
-            self.mem_write(DIV, 0);
+            self.mem_write(DIV, (self.system_counter >> 6) as u8);
             let signal_after = self.timer_signal(self.system_counter, tac);
 
             if signal_before && !signal_after {
@@ -99,7 +99,9 @@ impl Timer {
 
         if t.is_multiple_of(4) && !skip_counter_tick {
             self.system_counter = (self.system_counter + 1) & 0x3FFF;
-            self.mem_write(DIV, (self.system_counter >> 6) as u8);
+            let div = (self.system_counter >> 6) as u8;
+            self.mem_write(DIV, div);
+            println!("SYSTEM_COUNTER:{:04X} DIV:{:02X}", self.system_counter, div);
         }
 
         let new_signal = self.timer_signal(self.system_counter, self.mem_read(TAC));
