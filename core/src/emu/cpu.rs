@@ -926,6 +926,8 @@ impl Cpu {
         match self.mc {
             M1 => {
                 self.set_carry(1);
+                self.set_bcdh(0);
+                self.set_bcdn(0);
                 self.fetch_next();
             }
             M0 => self.set_mc(M2),
@@ -1037,7 +1039,8 @@ impl Cpu {
         match self.mc {
             M1 => {
                 self.fetch_next();
-                todo!("Opcode {} unimplemented", function!());
+                eprintln!("Stop not implemented!");
+                //todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
@@ -2097,12 +2100,6 @@ impl Cpu {
             }
             M1 => {
                 self.set_a(self.z());
-                eprintln!(
-                    "$$$$$$$$$$$ addr:{:04X} data:{:02X} a:{:02X}",
-                    self.addr(),
-                    self.data(),
-                    self.a()
-                );
                 self.fetch_next();
             }
             M0 => self.set_mc(M5),
@@ -2122,23 +2119,28 @@ impl Cpu {
             }
             M3 => {
                 self.set_addr(0x0000);
-                let (r, c, h, _) = if self.z() & 0x80 != 0 {
-                    self.spl().halfcarry_sub(!(self.z()) + 0x1)
-                } else {
-                    self.spl().halfcarry_add(self.z())
-                };
-                self.set_bcdn(0);
-                self.set_bcdh(h);
-                self.set_carry(c);
 
-                self.set_z(r);
-                self.set_data(self.z());
+                let offset = self.z() as i8 as i16;
+                let sp = self.sp() as i16;
+                let result = sp.wrapping_add(offset);
+
+                let sp_lo = self.sp() as u8;
+                let off_lo = self.z();
+                let h_flag = ((sp_lo ^ off_lo ^ ((sp_lo.wrapping_add(off_lo)) & 0xFF)) & 0x10) != 0;
+                let c_flag = ((sp_lo as u16 + off_lo as u16) & 0x100) != 0;
+
+                self.set_bcdn(0);
+                self.set_bcdh(h_flag as u8);
+                self.set_carry(c_flag as u8);
+                self.set_zero(0);
+
+                self.set_wz(result as u16);
+                self.set_data(result as u8);
             }
             M2 => {
                 self.set_addr(0x0000);
-                let (r, _, _, _) = self.sph().halfcarry_add(self.carry());
-                self.set_w(r);
-                self.set_data(self.w());
+                let w = self.wz();
+                self.set_data((w >> 8) as u8);
             }
             M1 => {
                 self.set_sp(self.wz());
@@ -2161,27 +2163,34 @@ impl Cpu {
             }
             M2 => {
                 self.set_addr(0x0000);
-                let (r, c, h, _) = if self.z() & 0x80 != 0 {
-                    self.spl().halfcarry_sub(!(self.z()) + 0x1)
-                } else {
-                    self.spl().halfcarry_add(self.z())
-                };
-                self.set_bcdn(0);
-                self.set_bcdh(h);
-                self.set_carry(c);
 
-                self.set_l(r);
+                let offset = self.z() as i8 as i16;
+                let sp = self.sp() as i16;
+                let result = sp.wrapping_add(offset);
+
+                let sp_lo = self.sp() as u8;
+                let off_lo = self.z();
+                let h_flag = ((sp_lo ^ off_lo ^ ((sp_lo.wrapping_add(off_lo)) & 0xFF)) & 0x10) != 0;
+                let c_flag = ((sp_lo as u16 + off_lo as u16) & 0x100) != 0;
+
+                self.set_bcdn(0);
+                self.set_bcdh(h_flag as u8);
+                self.set_carry(c_flag as u8);
+                self.set_zero(0);
+
+                self.set_hl(result as u16);
+                self.set_l((result & 0xFF) as u8);
                 self.set_data(self.z());
             }
             M1 => {
-                let (r, _, _, _) = self.sph().halfcarry_add(self.carry());
-                self.set_h(r);
                 self.fetch_next();
             }
             M0 => self.set_mc(M4),
+
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),
         }
     }
+
     // }}}
 
     // {{{ opcode ld_sp_hl
@@ -2815,7 +2824,7 @@ impl Cpu {
     pub fn tick(&mut self, t: u128) {
         self.own(true);
         if self.dbg_break >= 2 {
-            panic!("Mooneye break!");
+            //            panic!("Mooneye break!");
         }
         if t.is_multiple_of(4) {
             if !self.halted {
