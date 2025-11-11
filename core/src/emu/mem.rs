@@ -1,3 +1,6 @@
+use crate::emu::gb::Comp;
+use crate::emu::timer::*;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 enum Mbc {
@@ -15,6 +18,7 @@ enum Mbc {
 }
 
 pub struct Memory {
+    owner: Comp,
     mbc: Mbc,
     mem: [u8; 0x10000],
     cartridge: Vec<u8>,
@@ -22,6 +26,7 @@ pub struct Memory {
     addr: u16,
     write_div: bool,
     write_tac: bool,
+    tima_overflow: bool,
     cartridge_type: u8,
     rom_bank_count: u16,
     ram_bank_count: u8,
@@ -34,6 +39,7 @@ pub struct Memory {
 impl Memory {
     pub fn empty() -> Self {
         Memory {
+            owner: Comp::Cpu,
             mbc: Mbc::None,
             mem: [0u8; 0x10000],
             cartridge: [0u8; 0x10000].to_vec(),
@@ -41,6 +47,7 @@ impl Memory {
             addr: 0x0000,
             write_div: false,
             write_tac: false,
+            tima_overflow: false,
             cartridge_type: 0x00,
             rom_bank_count: 0x0000,
             ram_bank_count: 0x00,
@@ -59,6 +66,7 @@ impl Memory {
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
         mem[0xFF00] = 0xFF; // Stub Joypad
         let mem = Memory {
+            owner: Comp::Cpu,
             mbc,
             mem,
             cartridge: cartridge.to_vec(),
@@ -66,6 +74,7 @@ impl Memory {
             addr: 0x0000,
             write_div: false,
             write_tac: false,
+            tima_overflow: false,
             cartridge_type,
             rom_bank_count,
             ram_bank_count,
@@ -134,6 +143,10 @@ impl Memory {
     pub fn write(&mut self) {
         let addr = self.addr();
         let data = self.data();
+
+        if self.owner == Comp::Cpu && self.tima_overflow && addr == TIMA {
+            return;
+        }
         match addr {
             // 0x8000 => panic!("MEM WRITE!!!! data:{:02X}", data),
             0x0000..0x8000 => self.mbc_rom_write(),
@@ -182,6 +195,22 @@ impl Memory {
     pub fn set_tac(&mut self, tac: u8) {
         self.mem[0xFF07] = (self.mem[0xFF07] & 0xF8) + (tac & 0x07);
         self.write_tac = true;
+    }
+
+    pub fn set_tima_overflow(&mut self, tima_overflow: bool) {
+        self.tima_overflow = tima_overflow;
+    }
+
+    pub fn tima_overflow(&self) -> bool {
+        self.tima_overflow
+    }
+
+    pub fn owner(&self) -> Comp {
+        self.owner.clone()
+    }
+
+    pub fn set_owner(&mut self, owner: Comp) {
+        self.owner = owner;
     }
 
     pub fn check_write_div(&mut self) -> bool {

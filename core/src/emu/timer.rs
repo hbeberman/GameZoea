@@ -1,12 +1,13 @@
+use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-const DIV: u16 = 0xFF04;
-const TIMA: u16 = 0xFF05;
-const TMA: u16 = 0xFF06;
-const TAC: u16 = 0xFF07;
-const IF: u16 = 0xFF0F;
+pub const DIV: u16 = 0xFF04;
+pub const TIMA: u16 = 0xFF05;
+pub const TMA: u16 = 0xFF06;
+pub const TAC: u16 = 0xFF07;
+pub const IF: u16 = 0xFF0F;
 
 pub struct Timer {
     mem: Rc<RefCell<Memory>>,
@@ -56,13 +57,21 @@ impl Timer {
     }
 
     pub fn tick(&mut self, t: u128) {
+        self.own(true);
+
+        if t.is_multiple_of(4) {
+            self.set_tima_overflow(false);
+        }
         self.internal_tma = self.mem_read(TMA);
+        let mut overflowed = false;
 
         if self.overflow_delay > 0 {
             self.overflow_delay -= 1;
             if self.overflow_delay == 0 {
                 self.mem_write(TIMA, self.internal_tma);
                 self.mem_write(IF, self.mem_read(IF) | 0x4);
+                self.set_tima_overflow(true);
+                overflowed = true;
             }
         }
 
@@ -101,7 +110,10 @@ impl Timer {
             self.system_counter = (self.system_counter + 1) & 0x3FFF;
             let div = (self.system_counter >> 6) as u8;
             self.mem_write(DIV, div);
-            println!("SYSTEM_COUNTER:{:04X} DIV:{:02X}", self.system_counter, div);
+            //println!("SYSTEM_COUNTER:{:04X} DIV:{:02X}", self.system_counter, div);
+            if !overflowed {
+                self.set_tima_overflow(false);
+            }
         }
 
         let new_signal = self.timer_signal(self.system_counter, self.mem_read(TAC));
@@ -110,6 +122,7 @@ impl Timer {
         }
 
         self.prev_signal = new_signal;
+        self.own(false);
     }
 
     fn increment_tima(&mut self) {
@@ -147,5 +160,14 @@ impl Timer {
 
     pub fn check_write_tac(&mut self) -> bool {
         self.with_mem_mut(|mem| mem.check_write_tac())
+    }
+
+    pub fn set_tima_overflow(&mut self, tima_overflow: bool) {
+        self.with_mem_mut(|mem| mem.set_tima_overflow(tima_overflow))
+    }
+
+    pub fn own(&mut self, own: bool) {
+        let owner = if own { Comp::Timer } else { Comp::None };
+        self.with_mem_mut(|mem| mem.set_owner(owner))
     }
 }

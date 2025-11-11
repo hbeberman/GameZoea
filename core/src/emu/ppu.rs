@@ -1,4 +1,5 @@
 use crate::app::window::{FrameSender, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use crate::{bit, clearbit, isbitset, setbit};
 use std::cell::RefCell;
@@ -384,6 +385,11 @@ impl Ppu {
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.with_mem_mut(|mem| mem.dbg_write(addr, data));
+    }
+
+    pub fn own(&mut self, own: bool) {
+        let owner = if own { Comp::Ppu } else { Comp::None };
+        self.with_mem_mut(|mem| mem.set_owner(owner))
     }
 
     pub fn set_mode(&mut self, mode: u8) {

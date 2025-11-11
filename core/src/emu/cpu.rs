@@ -1,3 +1,4 @@
+use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use macros::*;
 use std::cell::RefCell;
@@ -381,36 +382,45 @@ impl Cpu {
         let reg_ie = self.mem_dbg_read(0xFFFF);
         let reg_if = self.mem_dbg_read(0xFF0F);
         let hit = reg_ie & reg_if;
-        if self.ime == 1 && hit != 0x00 {
+        let washalted = self.halted;
+        if hit != 0x00 {
             self.halted = false;
-            self.set_ime(0x00);
-            self.mc = M0;
-            self.executing = if hit & 0x01 != 0 {
-                self.mem_dbg_write(0xFF0F, reg_if & !0x01);
-                self.push_pc(0x0040);
-                Cpu::int_vblank
-            } else if hit & 0x02 != 0 {
-                self.mem_dbg_write(0xFF0F, reg_if & !0x02);
-                self.push_pc(0x0048);
-                Cpu::int_stat
-            } else if hit & 0x04 != 0 {
-                self.mem_dbg_write(0xFF0F, reg_if & !0x04);
-                self.push_pc(0x0050);
-                Cpu::int_timer
-            } else if hit & 0x08 != 0 {
-                self.mem_dbg_write(0xFF0F, reg_if & !0x08);
-                self.push_pc(0x0058);
-                Cpu::int_serial
-            } else if hit & 0x10 != 0 {
-                self.mem_dbg_write(0xFF0F, reg_if & !0x10);
-                self.push_pc(0x0060);
-                Cpu::int_joypad
-            } else {
-                panic!("Invalid value in interrupt registers");
-            };
-            (self.executing)(self);
-            self.mc = self.mc.next();
-            self.decode();
+            if self.ime == 1 {
+                self.set_ime(0x00);
+                self.mc = M0;
+                self.executing = if hit & 0x01 != 0 {
+                    self.mem_dbg_write(0xFF0F, reg_if & !0x01);
+                    self.push_pc(0x0040);
+                    Cpu::int_vblank
+                } else if hit & 0x02 != 0 {
+                    self.mem_dbg_write(0xFF0F, reg_if & !0x02);
+                    self.push_pc(0x0048);
+                    Cpu::int_stat
+                } else if hit & 0x04 != 0 {
+                    self.mem_dbg_write(0xFF0F, reg_if & !0x04);
+                    self.push_pc(0x0050);
+                    Cpu::int_timer
+                } else if hit & 0x08 != 0 {
+                    self.mem_dbg_write(0xFF0F, reg_if & !0x08);
+                    self.push_pc(0x0058);
+                    Cpu::int_serial
+                } else if hit & 0x10 != 0 {
+                    self.mem_dbg_write(0xFF0F, reg_if & !0x10);
+                    self.push_pc(0x0060);
+                    Cpu::int_joypad
+                } else {
+                    panic!("Invalid value in interrupt registers");
+                };
+                (self.executing)(self);
+                self.mc = self.mc.next();
+                self.decode();
+            } else if washalted {
+                eprintln!("Unhalting!");
+                eprintln!("m:{:?}", self.mc);
+                self.fetch_next();
+                self.mc = self.mc.next();
+                eprintln!("m:{:?}", self.mc);
+            }
         }
     }
 
@@ -1098,7 +1108,6 @@ impl Cpu {
             M1 => {
                 self.halted = true;
                 // TODO: halt has a lot of interactions to implement still
-                // self.fetch_next()
                 self.set_mc(M2);
             }
             M0 => self.set_mc(M2),
@@ -2804,6 +2813,7 @@ impl Cpu {
 
     // {{{ Cycle Functions
     pub fn tick(&mut self, t: u128) {
+        self.own(true);
         if self.dbg_break >= 2 {
             panic!("Mooneye break!");
         }
@@ -2816,6 +2826,7 @@ impl Cpu {
                 self.set_ime(0x1);
             }
         }
+        self.own(false);
     }
     // }}}
 
@@ -2868,6 +2879,11 @@ impl Cpu {
     fn with_mem<R>(&self, f: impl FnOnce(&Memory) -> R) -> R {
         let mem = self.mem.borrow();
         f(&mem)
+    }
+
+    pub fn own(&mut self, own: bool) {
+        let owner = if own { Comp::Cpu } else { Comp::None };
+        self.with_mem_mut(|mem| mem.set_owner(owner))
     }
 
     // }}}

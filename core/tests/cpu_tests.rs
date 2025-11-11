@@ -1912,5 +1912,68 @@ print_hex4_again:
     }
     // }}}
 
+    // {{{ test unhalting
+    #[test]
+    fn unhalting() {
+        const ROM: &[u8] = gbasm! {r#"
+    di
+    xor a
+    ld  [$FF0F], a          ; IF = 0
+    ld  [$FF04], a          ; reset DIV
+
+    ; --- Configure timer to overflow soon ---
+    ld  a, $00
+    ld  [$FF06], a          ; TMA = 0
+    ld  a, $FE
+    ld  [$FF05], a          ; TIMA = 0xFE
+    ld  a, $05
+    ld  [$FF07], a          ; TAC = start @ 262 kHz
+
+    ; --- Enable only timer interrupt ---
+    ld  a, $04
+    ld  [$FFFF], a          ; IE = TIMER only
+
+    di                      ; enable global interrupts
+    halt                    ; will wake when timer overflows
+
+    ; Execution resumes here *after* ISR returns
+    xor a
+    ld  [$FFFF], a          ; mask all interrupts (IE = 0)
+    ld  [$FF07], a          ; stop timer (TAC = 0)
+    ld  [$FF0F], a          ; clear IF
+    halt
+    halt
+
+; ------------------------------------------------------------
+; Interrupt handlers
+; ------------------------------------------------------------
+VBlankISR:
+LCDStatISR:
+SerialISR:
+JoypadISR:
+    reti
+
+; Timer interrupt: increments A and returns
+TimerISR:
+    inc a                  ; bump A so we can observe it changed
+    inc a
+    reti
+
+; ------------------------------------------------------------
+; Interrupt vectors (unique jump stubs)
+; ------------------------------------------------------------
+SECTION "InterruptVectors", ROM0[$0000]
+VBlankVector:   jp VBlankISR        ; 0x0040
+LCDStatVector:  jp LCDStatISR       ; 0x0048
+TimerVector:    jp TimerISR         ; 0x0050
+SerialVector:   jp SerialISR        ; 0x0058
+JoypadVector:   jp JoypadISR        ; 0x0060
+    "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(200000);
+        assert_hex_eq!(gb.cpu.a(), 0x00);
+    }
+    // }}}
+
     // }}}
 }

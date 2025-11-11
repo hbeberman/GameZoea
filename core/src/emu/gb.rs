@@ -13,6 +13,15 @@ const L_CPU: u8 = 1 << 0;
 const L_ADJ: u8 = 1 << 1;
 const L_TIMER: u8 = 1 << 2;
 const L_R: u8 = 1 << 3;
+const L_MEM: u8 = 1 << 4;
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Comp {
+    None,
+    Cpu,
+    Ppu,
+    Timer,
+}
 
 #[allow(dead_code)]
 pub struct Gameboy {
@@ -64,9 +73,10 @@ impl Gameboy {
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);
             self.t += 1;
-            if cur != self.cpu.retired() {
+            if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
-                self.log_status(L_CPU);
+                //self.log_status(L_CPU);
+                self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
@@ -78,6 +88,7 @@ impl Gameboy {
             self.tick(1);
             if cur != self.cpu.retired() {
                 i -= 1;
+                self.log_status(L_CPU + L_TIMER);
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
             }
             if self.cpu.halted() {
@@ -112,6 +123,7 @@ impl Gameboy {
         let adj = f & L_ADJ != 0x00;
         let timer = f & L_TIMER != 0x00;
         let retired = f & L_R != 0x00;
+        let mem = f & L_MEM != 0x00;
         if adj && self.cpu.prev_pc() == self.cpu.cur_pc() {
             return;
         }
@@ -174,7 +186,20 @@ impl Gameboy {
             String::new()
         };
 
-        println!("{}{}{}", cpustr, retiredstr, timerstr);
+        let memstr = if mem {
+            let addr = [0xFFFF, 0xFF0F];
+            let s = format!(
+                "||{}",
+                addr.iter()
+                    .map(|&a| format!(" {:04X}:{:02X}", a, self.mem_dbg_read(a)))
+                    .collect::<String>()
+            );
+            s
+        } else {
+            String::new()
+        };
+
+        println!("{}{}{}{}", cpustr, retiredstr, timerstr, memstr);
     }
 
     fn with_mem<R>(&self, f: impl FnOnce(&Memory) -> R) -> R {
