@@ -60,9 +60,9 @@ impl Gameboy {
     pub fn tick(&mut self, count: u128) {
         for _ in 0..count {
             let cur = self.cpu.retired();
+            self.timer.tick(self.t);
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);
-            self.timer.tick(self.t);
             self.t += 1;
             if cur != self.cpu.retired() {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
