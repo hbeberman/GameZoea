@@ -19,18 +19,23 @@ pub struct Timer {
 
 impl Timer {
     pub fn init_dmg(mem: Rc<RefCell<Memory>>) -> Self {
-        let (initial_tma, initial_tac) = {
-            let mem_ref = mem.borrow();
-            (mem_ref.dbg_read(TMA), mem_ref.dbg_read(TAC))
-        };
-        Timer {
+        let tima = 0x00;
+        let internal_tma = 0x00;
+        let last_tac = 0xF8;
+
+        let mut timer = Timer {
             mem,
             system_counter: 0,
-            internal_tma: initial_tma,
+            internal_tma,
             prev_signal: false,
-            last_tac: initial_tac,
+            last_tac,
             overflow_delay: 0,
-        }
+        };
+
+        timer.mem_write(TIMA, tima);
+        timer.mem_write(TMA, internal_tma);
+        timer.mem_write(TAC, last_tac);
+        timer
     }
 
     fn timer_bit_mask(tac: u8) -> u16 {
@@ -51,13 +56,13 @@ impl Timer {
     }
 
     pub fn tick(&mut self, t: u128) {
-        self.internal_tma = self.mem_dbg_read(TMA);
+        self.internal_tma = self.mem_read(TMA);
 
         if self.overflow_delay > 0 {
             self.overflow_delay -= 1;
             if self.overflow_delay == 0 {
-                self.mem_dbg_write(TIMA, self.internal_tma);
-                self.mem_dbg_write(IF, self.mem_dbg_read(IF) | 0x4);
+                self.mem_write(TIMA, self.internal_tma);
+                self.mem_write(IF, self.mem_read(IF) | 0x4);
             }
         }
 
@@ -65,10 +70,10 @@ impl Timer {
         let mut skip_counter_tick = false;
 
         if self.check_write_div() {
-            let tac = self.mem_dbg_read(TAC);
+            let tac = self.mem_read(TAC);
             let signal_before = self.timer_signal(self.system_counter, tac);
             self.system_counter = 0;
-            self.mem_dbg_write(DIV, 0);
+            self.mem_write(DIV, 0);
             let signal_after = self.timer_signal(self.system_counter, tac);
 
             if signal_before && !signal_after {
@@ -80,7 +85,7 @@ impl Timer {
 
         if self.check_write_tac() {
             let old_tac = self.last_tac;
-            let new_tac = self.mem_dbg_read(TAC);
+            let new_tac = self.mem_read(TAC);
             self.last_tac = new_tac;
 
             let signal_before = self.timer_signal(self.system_counter, old_tac);
@@ -94,10 +99,10 @@ impl Timer {
 
         if t.is_multiple_of(4) && !skip_counter_tick {
             self.system_counter = (self.system_counter + 1) & 0x3FFF;
-            self.mem_dbg_write(DIV, (self.system_counter >> 6) as u8);
+            self.mem_write(DIV, (self.system_counter >> 6) as u8);
         }
 
-        let new_signal = self.timer_signal(self.system_counter, self.mem_dbg_read(TAC));
+        let new_signal = self.timer_signal(self.system_counter, self.mem_read(TAC));
         if prev_signal && !new_signal {
             self.increment_tima();
         }
@@ -106,14 +111,14 @@ impl Timer {
     }
 
     fn increment_tima(&mut self) {
-        let tima = self.mem_dbg_read(TIMA);
+        let tima = self.mem_read(TIMA);
         let (result, overflow) = tima.overflowing_add(1);
 
         if overflow {
-            self.mem_dbg_write(TIMA, 0);
+            self.mem_write(TIMA, 0);
             self.overflow_delay = 4;
         } else {
-            self.mem_dbg_write(TIMA, result);
+            self.mem_write(TIMA, result);
         }
     }
 
@@ -127,23 +132,10 @@ impl Timer {
         f(&mem)
     }
 
-    pub fn mem_read(&mut self) {
-        self.with_mem_mut(|mem| {
-            mem.read();
-        });
-    }
-
-    pub fn mem_dbg_read(&self, addr: u16) -> u8 {
+    pub fn mem_read(&self, addr: u16) -> u8 {
         self.with_mem(|mem| mem.dbg_read(addr))
     }
-
-    pub fn mem_write(&mut self) {
-        self.with_mem_mut(|mem| {
-            mem.write();
-        });
-    }
-
-    pub fn mem_dbg_write(&mut self, addr: u16, data: u8) {
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.with_mem_mut(|mem| mem.dbg_write(addr, data));
     }
 

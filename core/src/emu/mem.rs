@@ -57,9 +57,6 @@ impl Memory {
         let rom_bank_count = Memory::rom_bank_count_decode(cartridge);
         let ram_bank_count = Memory::ram_bank_count_decode(cartridge);
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
-        // TODO: move the initialization of timer registers into the timer init code
-        mem[0xFF05] = 0x00; // TIMA initial value after DMG boot ROM
-        mem[0xFF07] = 0xF8; // TAC initial value after DMG boot ROM
         mem[0xFF00] = 0xFF; // Stub Joypad
         let mem = Memory {
             mbc,
