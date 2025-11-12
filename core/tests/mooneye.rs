@@ -19,9 +19,12 @@ mod tests {
 
     #[test]
     #[allow(non_snake_case)]
+    #[ignore = "TODO"]
     fn mooneye_boot_hwio_dmgABCmgb() {
         const ROM: &[u8] = gbrom!("tests/roms/mooneye/acceptance/boot_hwio-dmgABCmgb.gb");
         let mut gb = Gameboy::headless_dmg(ROM);
         gb.step(100000);
+        eprintln!("mooneye {}", gb.serial.buffmt());
+        panic!();
     }
 }

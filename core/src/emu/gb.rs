@@ -2,6 +2,7 @@ use crate::app::window::*;
 use crate::emu::cpu::Cpu;
 use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
+use crate::emu::serial::Serial;
 use crate::emu::timer::*;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -21,6 +22,7 @@ pub enum Comp {
     Cpu,
     Ppu,
     Timer,
+    Serial,
 }
 
 #[allow(dead_code)]
@@ -29,6 +31,7 @@ pub struct Gameboy {
     pub cpu: Cpu,
     pub ppu: Ppu,
     pub timer: Timer,
+    pub serial: Serial,
     mem: Rc<RefCell<Memory>>,
 }
 
@@ -40,6 +43,7 @@ impl Gameboy {
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
             ppu: Ppu::headless_dmg(mem.clone()),
             timer: Timer::init_dmg(mem.clone()),
+            serial: Serial::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -51,6 +55,7 @@ impl Gameboy {
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
             ppu: Ppu::headless_dmg(mem.clone()),
             timer: Timer::init_dmg(mem.clone()),
+            serial: Serial::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -62,6 +67,7 @@ impl Gameboy {
             cpu: Cpu::init_dmg_with_memory(mem.clone()),
             ppu: Ppu::init_dmg(frame_tx, mem.clone()),
             timer: Timer::init_dmg(mem.clone()),
+            serial: Serial::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -72,6 +78,7 @@ impl Gameboy {
             self.timer.tick(self.t);
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);
+            self.serial.tick(self.t);
             self.t += 1;
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
@@ -88,7 +95,7 @@ impl Gameboy {
             self.tick(1);
             if cur != self.cpu.retired() {
                 i -= 1;
-                self.log_status(L_CPU + L_TIMER);
+                //self.log_status(L_CPU + L_TIMER);
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
             }
             if self.cpu.halted() {

@@ -1971,5 +1971,48 @@ JoypadVector:   jp JoypadISR        ; 0x0060
     }
     // }}}
 
+    // {{{ test serial output with assert_blargg
+    #[test]
+    fn serial_output_test() {
+        const ROM: &[u8] = gbasm! {r#"
+  di
+  ; Write "Hi" to serial port
+  ld a, 'H'
+  ld [0xFF01], a  ; SB register
+  ld a, 0x81
+  ld [0xFF02], a  ; SC register (start transfer)
+
+  ld a, 'i'
+  ld [0xFF01], a  ; SB register
+  ld a, 0x81
+  ld [0xFF02], a  ; SC register (start transfer)
+
+  halt
+        "#};
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(20000);
+
+        // Verify serial output contains "Hi"
+        assert_blargg!(gb.serial.buffmt(), "Hi");
+    }
+
+    // Uncomment to test failure message:
+    // #[test]
+    // #[should_panic(expected = "Serial buffer mismatch")]
+    // fn serial_output_test_failure() {
+    //     const ROM: &[u8] = gbasm! {r#"
+    //   di
+    //   ld a, 'H'
+    //   ld [0xFF01], a
+    //   ld a, 0x81
+    //   ld [0xFF02], a
+    //   halt
+    //     "#};
+    //     let mut gb = Gameboy::headless_dmg(ROM);
+    //     gb.step(20000);
+    //     assert_blargg!(gb.serial.buffmt(), "Wrong");  // This will show nice error!
+    // }
+    // }}}
+
     // }}}
 }

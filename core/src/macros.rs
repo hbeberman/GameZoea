@@ -54,3 +54,23 @@ macro_rules! assert_hex_eq {
         assert!($a == $b, "assertion failed: {:#06x} != {:#06x}", $a, $b);
     };
 }
+
+/// Asserts that a serial buffer contains the expected string
+///
+/// # Examples
+///
+/// ```ignore
+/// assert_blargg!(gb.serial.buffmt(), "Hello");
+/// ```
+#[macro_export]
+macro_rules! assert_blargg {
+    ($buffer:expr, $expected:expr) => {
+        assert_eq!(
+            $buffer,
+            $expected,
+            "Serial buffer mismatch:\n  expected: {:?}\n  got:      {:?}",
+            $expected,
+            $buffer
+        );
+    };
+}

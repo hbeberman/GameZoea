@@ -19,6 +19,20 @@ fn main() {
         }
     };
 
+    // Validate that the ROM has a .gb extension
+    if !rom_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("gb"))
+        .unwrap_or(false)
+    {
+        eprintln!(
+            "Error: ROM file must have a .gb extension, got: {:?}",
+            rom_path.display()
+        );
+        return;
+    }
+
     let rom_bytes = match fs::read(&rom_path) {
         Ok(bytes) => bytes,
         Err(err) => {
