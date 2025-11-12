@@ -94,4 +94,45 @@ mod tests {
         gb.step(8000000);
         assert_blargg!(gb.serial.buffmt(), "11-op a,(hl)");
     }
+
+    #[test]
+    fn blargg_instr_timing() {
+        const ROM: &[u8] = gbrom!("tests/roms/blargg/instr_timing/instr_timing.gb");
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(800000);
+        assert_blargg!(gb.serial.buffmt(), "instr_timing");
+    }
+
+    #[test]
+    #[ignore = "TODO"]
+    fn blargg_interrupt_time() {
+        const ROM: &[u8] = gbrom!("tests/roms/blargg/interrupt_time/interrupt_time.gb");
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(800000);
+        assert_blargg!(gb.serial.buffmt(), "interrupt_time");
+    }
+
+    #[test]
+    fn blargg_mem_timing_individual_01_read_timing() {
+        const ROM: &[u8] = gbrom!("tests/roms/blargg/mem_timing/individual/01-read_timing.gb");
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(800000);
+        assert_blargg!(gb.serial.buffmt(), "01-read_timing");
+    }
+
+    #[test]
+    fn blargg_mem_timing_individual_02_write_timing() {
+        const ROM: &[u8] = gbrom!("tests/roms/blargg/mem_timing/individual/02-write_timing.gb");
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(800000);
+        assert_blargg!(gb.serial.buffmt(), "02-write_timing");
+    }
+
+    #[test]
+    fn blargg_mem_timing_individual_03_modify_timing() {
+        const ROM: &[u8] = gbrom!("tests/roms/blargg/mem_timing/individual/03-modify_timing.gb");
+        let mut gb = Gameboy::headless_dmg(ROM);
+        gb.step(800000);
+        assert_blargg!(gb.serial.buffmt(), "03-modify_timing");
+    }
 }
