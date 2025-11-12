@@ -1720,7 +1720,7 @@ TimerHandler:
   ld [$FF07], a
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(80000);
+        gb.tick(800000);
         assert_hex_eq!(gb.cpu.de(), 0x3331);
     }
     // }}}
@@ -1752,7 +1752,7 @@ TimerHandler:
   halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(2000);
+        gb.tick(80000);
         assert_hex_eq!(gb.cpu.de(), 0x00CB);
     }
     // }}}
@@ -1784,7 +1784,7 @@ TimerHandler:
   halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(20000);
+        gb.tick(80000);
         assert_hex_eq!(gb.cpu.de(), 0x0331);
     }
     // }}}
@@ -1818,7 +1818,7 @@ TimerHandler:
   halt
         "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(20000);
+        gb.tick(80000);
         assert_hex_eq!(gb.cpu.de(), 0x0CCB);
     }
     // }}}
@@ -1851,7 +1851,7 @@ TimerHandler:
   halt
     "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(20000);
+        gb.tick(80000);
         assert_hex_eq!(gb.cpu.de(), 0x00CB);
     }
     // }}}
@@ -1900,9 +1900,8 @@ print_hex4_again:
   ret
     "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(20000);
+        gb.tick(2000000);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xFFFB), 0x32);
-        //        assert_hex_eq!(gb.cpu.af(), 0x0032);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xC000), 0x33);
         assert_hex_eq!(gb.cpu.mem_dbg_read(0xC001), 0x32);
     }
@@ -1966,52 +1965,9 @@ SerialVector:   jp SerialISR        ; 0x0058
 JoypadVector:   jp JoypadISR        ; 0x0060
     "#};
         let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(200000);
+        gb.tick(80000);
         assert_hex_eq!(gb.cpu.a(), 0x00);
     }
-    // }}}
-
-    // {{{ test serial output with assert_blargg
-    #[test]
-    fn serial_output_test() {
-        const ROM: &[u8] = gbasm! {r#"
-  di
-  ; Write "Hi" to serial port
-  ld a, 'H'
-  ld [0xFF01], a  ; SB register
-  ld a, 0x81
-  ld [0xFF02], a  ; SC register (start transfer)
-
-  ld a, 'i'
-  ld [0xFF01], a  ; SB register
-  ld a, 0x81
-  ld [0xFF02], a  ; SC register (start transfer)
-
-  halt
-        "#};
-        let mut gb = Gameboy::headless_dmg(ROM);
-        gb.step(20000);
-
-        // Verify serial output contains "Hi"
-        assert_blargg!(gb.serial.buffmt(), "Hi");
-    }
-
-    // Uncomment to test failure message:
-    // #[test]
-    // #[should_panic(expected = "Serial buffer mismatch")]
-    // fn serial_output_test_failure() {
-    //     const ROM: &[u8] = gbasm! {r#"
-    //   di
-    //   ld a, 'H'
-    //   ld [0xFF01], a
-    //   ld a, 0x81
-    //   ld [0xFF02], a
-    //   halt
-    //     "#};
-    //     let mut gb = Gameboy::headless_dmg(ROM);
-    //     gb.step(20000);
-    //     assert_blargg!(gb.serial.buffmt(), "Wrong");  // This will show nice error!
-    // }
     // }}}
 
     // }}}

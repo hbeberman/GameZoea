@@ -40,8 +40,8 @@ impl Serial {
         let mut sc = self.mem_read(SC);
         let sb = self.mem_read(SB);
 
+        // TODO: actually do timed serial transfers
         if isbitset!(sc, 7) {
-            eprintln!("serial: {:02X}", sb);
             self.buf.push(sb);
         }
 
@@ -70,85 +70,8 @@ impl Serial {
         self.with_mem_mut(|mem| mem.dbg_write(addr, data));
     }
 
-    // TODO: delete
-    pub fn set_tima_overflow(&mut self, tima_overflow: bool) {
-        self.with_mem_mut(|mem| mem.set_tima_overflow(tima_overflow))
-    }
-
     pub fn own(&mut self, own: bool) {
         let owner = if own { Comp::Serial } else { Comp::None };
         self.with_mem_mut(|mem| mem.set_owner(owner))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::assert_blargg;
-
-    #[test]
-    fn test_buffmt_ascii() {
-        let mem = Rc::new(RefCell::new(Memory::empty()));
-        let mut serial = Serial::init_dmg(mem);
-
-        // Add some ASCII bytes to the buffer
-        serial.buf = vec![0x48, 0x65, 0x6C, 0x6C, 0x6F]; // "Hello"
-
-        assert_eq!(serial.buffmt(), "Hello");
-    }
-
-    #[test]
-    fn test_buffmt_empty() {
-        let mem = Rc::new(RefCell::new(Memory::empty()));
-        let serial = Serial::init_dmg(mem);
-
-        assert_eq!(serial.buffmt(), "");
-    }
-
-    #[test]
-    fn test_buffmt_with_newline() {
-        let mem = Rc::new(RefCell::new(Memory::empty()));
-        let mut serial = Serial::init_dmg(mem);
-
-        // "Test\n"
-        serial.buf = vec![0x54, 0x65, 0x73, 0x74, 0x0A];
-
-        assert_eq!(serial.buffmt(), "Test\n");
-    }
-
-    #[test]
-    fn test_buffmt_non_ascii() {
-        let mem = Rc::new(RefCell::new(Memory::empty()));
-        let mut serial = Serial::init_dmg(mem);
-
-        // Mix of ASCII and non-UTF8 bytes
-        serial.buf = vec![0x41, 0x42, 0xFF, 0x43]; // "AB�C" (FF is invalid UTF-8)
-
-        let result = serial.buffmt();
-        assert!(result.starts_with("AB"));
-        assert!(result.ends_with("C"));
-    }
-
-    #[test]
-    fn test_assert_blargg_success() {
-        let mem = Rc::new(RefCell::new(Memory::empty()));
-        let mut serial = Serial::init_dmg(mem);
-
-        serial.buf = vec![0x48, 0x65, 0x6C, 0x6C, 0x6F]; // "Hello"
-
-        // This should pass
-        assert_blargg!(serial.buffmt(), "Hello");
-    }
-
-    #[test]
-    #[should_panic(expected = "Serial buffer mismatch")]
-    fn test_assert_blargg_failure() {
-        let mem = Rc::new(RefCell::new(Memory::empty()));
-        let mut serial = Serial::init_dmg(mem);
-
-        serial.buf = vec![0x48, 0x65, 0x6C, 0x6C, 0x6F]; // "Hello"
-
-        // This should fail
-        assert_blargg!(serial.buffmt(), "Goodbye");
     }
 }

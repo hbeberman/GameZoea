@@ -56,21 +56,14 @@ macro_rules! assert_hex_eq {
 }
 
 /// Asserts that a serial buffer contains the expected string
-///
-/// # Examples
-///
-/// ```ignore
-/// assert_blargg!(gb.serial.buffmt(), "Hello");
-/// ```
 #[macro_export]
 macro_rules! assert_blargg {
     ($buffer:expr, $expected:expr) => {
+        let expected_with_newlines = format!("{}\n\n\nPassed\n", $expected);
         assert_eq!(
-            $buffer,
-            $expected,
+            $buffer, expected_with_newlines,
             "Serial buffer mismatch:\n  expected: {:?}\n  got:      {:?}",
-            $expected,
-            $buffer
+            expected_with_newlines, $buffer
         );
     };
 }

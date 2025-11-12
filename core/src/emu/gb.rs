@@ -98,10 +98,6 @@ impl Gameboy {
                 //self.log_status(L_CPU + L_TIMER);
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
             }
-            if self.cpu.halted() {
-                //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
-                return;
-            }
         }
     }
 
