@@ -67,6 +67,51 @@ EntryPoint:{}
     format!("&[{}]", byte_list).parse().unwrap()
 }
 
+/// Loads a Game Boy ROM file (.gb) at compile time and returns it as a byte slice.
+///
+/// # Panics
+///
+/// This macro will panic at compile time if:
+/// - The file path does not end with `.gb`
+/// - The file cannot be read (doesn't exist, permission denied, etc.)
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use macros::gbrom;
+///
+/// const ROM: &[u8] = gbrom!("tests/roms/tetris.gb");
+/// let gb = Gameboy::headless_dmg(ROM);
+/// ```
+///
+/// ```rust,ignore
+/// // This will panic at compile time - not a .gb file
+/// const ROM: &[u8] = gbrom!("game.txt");
+/// ```
+#[proc_macro]
+pub fn gbrom(input: TokenStream) -> TokenStream {
+    let path_str = input.to_string();
+    let trimmed = path_str.trim().trim_matches('"');
+
+    // Check if the file has a .gb extension
+    if !trimmed.ends_with(".gb") {
+        panic!("gbrom! macro can only load .gb files, got: {}", trimmed);
+    }
+
+    // Read the .gb file
+    let bytes = fs::read(trimmed)
+        .unwrap_or_else(|e| panic!("Failed to read ROM file '{}': {}", trimmed, e));
+
+    // Generate the byte array literal
+    let byte_list = bytes
+        .iter()
+        .map(|b| format!("{:#04x}", b))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!("&[{}]", byte_list).parse().unwrap()
+}
+
 #[proc_macro]
 pub fn function(_input: TokenStream) -> TokenStream {
     // The generated code is just an expression block returning the function name
