@@ -324,18 +324,14 @@ fn ppu_line_progression() {
 
     let mut gb = Gameboy::cartless_dmg();
 
-    // start of frame
     assert_eq!(gb.ppu.ly(), 0);
 
-    // one scanline is 456 dots
     gb.tick(456);
     assert_eq!(gb.ppu.ly(), 1);
 
-    // advance to line 10
     gb.tick(456 * 9);
     assert_eq!(gb.ppu.ly(), 10);
 
-    // reach start of VBlank (line 144)
     gb.tick(456 * 134);
     assert_eq!(gb.ppu.ly(), 144);
 

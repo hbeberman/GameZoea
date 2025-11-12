@@ -1038,9 +1038,8 @@ impl Cpu {
     pub fn stop(&mut self) {
         match self.mc {
             M1 => {
+                // TODO: Handle stop correctly
                 self.fetch_next();
-                eprintln!("Stop not implemented!");
-                //todo!("Opcode {} unimplemented", function!());
             }
             M0 => self.set_mc(M2),
             _ => panic!("Invalid mc in {}: {:?}", function!(), self.mc),

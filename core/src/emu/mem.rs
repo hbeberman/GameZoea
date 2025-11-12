@@ -122,11 +122,6 @@ impl Memory {
     }
 
     pub fn read(&mut self) {
-        //TODO FIXME FIXME
-        if self.owner == Comp::Cpu && self.addr == 0xFF44 {
-            self.data = 0x90;
-            return;
-        }
         self.data = match self.addr {
             0x0000..=0x7FFF => self.mbc_read(),
             0xA000..=0xBFFF => self.mbc_read(),

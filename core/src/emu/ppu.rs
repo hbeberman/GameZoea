@@ -242,7 +242,7 @@ impl Ppu {
                 */
                 let intflags = self.mem_read(IFLAG) | 0x1;
                 self.mem_write(0xFF0F, intflags);
-                4560
+                456
             } else {
                 // Next mode is OAM scan
                 self.mode = Mode::M2;

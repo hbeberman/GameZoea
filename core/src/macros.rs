@@ -1,3 +1,4 @@
+/// Returns a single set bit based on the argmuent
 #[macro_export]
 macro_rules! bit {
     ($x:expr) => {{
@@ -44,4 +45,12 @@ macro_rules! togglebit {
         assert!($bit < bits, "bit index out of range for type");
         $value ^= 1 << $bit;
     }};
+}
+
+/// Custom assertion with failure print in hex
+#[macro_export]
+macro_rules! assert_hex_eq {
+    ($a:expr, $b:expr) => {
+        assert!($a == $b, "assertion failed: {:#06x} != {:#06x}", $a, $b);
+    };
 }
