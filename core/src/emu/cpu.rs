@@ -210,6 +210,7 @@ pub struct Cpu {
     mc: Mc,
     executing: fn(&mut Cpu),
     halted: bool,
+    haltbug: bool,
     retired: u64,
     cur_pc: u16,
     prev_pc: u16,
@@ -417,6 +418,9 @@ impl Cpu {
             } else if washalted {
                 eprintln!("Unhalting!");
                 eprintln!("m:{:?}", self.mc);
+                if self.haltbug {
+                    self.set_pc(self.pc() - 1);
+                }
                 self.fetch_next();
                 self.mc = self.mc.next();
                 eprintln!("m:{:?}", self.mc);
@@ -456,6 +460,7 @@ impl Cpu {
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
+            haltbug: false,
             retired: 0,
             cur_pc: initial_pc,
             prev_pc: initial_pc,
@@ -1108,7 +1113,18 @@ impl Cpu {
     pub fn halt(&mut self) {
         match self.mc {
             M1 => {
-                self.halted = true;
+                let reg_ie = self.mem_dbg_read(0xFFFF);
+                let reg_if = self.mem_dbg_read(0xFF0F);
+                let hit = reg_ie & reg_if;
+                if hit != 0 && self.ime == 0 {
+                    // TODO: implement ei and rst special cases for halt bug
+                    self.set_pc(self.pc() - 1);
+                    self.fetch_next();
+                    self.haltbug = false;
+                } else {
+                    self.halted = true;
+                    self.haltbug = false;
+                }
                 // TODO: halt has a lot of interactions to implement still
                 self.set_mc(M2);
             }
@@ -3369,6 +3385,7 @@ impl std::default::Default for Cpu {
             mc: Mc::M1,
             executing: Cpu::nop,
             halted: false,
+            haltbug: false,
             retired: 0,
             cur_pc: 0,
             prev_pc: 0,
