@@ -27,6 +27,7 @@ pub enum Comp {
     Ppu,
     Timer,
     Serial,
+    Joypad,
 }
 
 #[allow(dead_code)]
