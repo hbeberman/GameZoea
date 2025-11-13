@@ -157,13 +157,16 @@ impl Memory {
             0xD000..0xE000 => self.mem[addr as usize] = data, // 4 KiB Work RAM (GBC Bank 01-07)
             0xE000..0xFE00 => self.mem[(addr & 0x3FFF) as usize] = data, // Echo Ram
             0xFE00..0xFEA0 => self.write_oam(addr, data),
-            0xFEA0..0xFF00 => panic!("Memory write to not usable: {:04x}:{:02x}", addr, data),
+            0xFEA0..0xFF00 => (), // Not Usable
+            0xFF00 => {
+                self.mem[addr as usize] = self.mem[addr as usize] & 0x14 | data & 0x20;
+            }
             0xFF04 => {
                 self.mem[addr as usize] = 0;
                 self.write_div = true;
             }
             0xFF07 => self.set_tac(data),
-            0xFF00..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
+            0xFF01..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
             0xFFFF => self.mem[addr as usize] = data,         // Interrupt Enable
         }

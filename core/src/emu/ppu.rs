@@ -251,6 +251,7 @@ impl Ppu {
                 if oa.x != 0 || oa.y != 0 {
                     eprintln!("OBJECT {}", oa);
                 }
+                self.objects.push(oa);
             }
         }
     }

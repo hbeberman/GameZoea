@@ -1,19 +1,32 @@
 use gamezoea::emu::gb::*;
-use macros::*;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
 
     const MOONEYE_STEPS: u128 = 80_000_000;
+
+    fn load_mooneye_rom(path: &str) -> Vec<u8> {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let rom_path = PathBuf::from(manifest_dir).join(path);
+        fs::read(&rom_path).unwrap_or_else(|e| {
+            panic!(
+                "Failed to read ROM '{}': {}",
+                rom_path.display(),
+                e
+            )
+        })
+    }
 
     macro_rules! mooneye_test {
         ($(#[$meta:meta])* $name:ident, $path:literal) => {
             #[test]
             $(#[$meta])*
             fn $name() {
-                const ROM: &[u8] = gbrom!($path);
-                let mut gb = Gameboy::headless_dmg(ROM);
+                let rom = load_mooneye_rom($path);
+                let mut gb = Gameboy::headless_dmg(&rom);
                 gb.step_mooneye(MOONEYE_STEPS);
             }
         };
