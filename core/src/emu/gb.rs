@@ -1,4 +1,7 @@
-use crate::app::window::*;
+use crate::app::{
+    control::{ControlMessage, ControlReceiver},
+    window::*,
+};
 use crate::emu::cpu::Cpu;
 use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
@@ -6,6 +9,7 @@ use crate::emu::serial::Serial;
 use crate::emu::timer::*;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
 const NORMAL_CLOCK: f64 = 1.0 / 4_194_304.0;
@@ -101,7 +105,25 @@ impl Gameboy {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn step_blargg(&mut self, count: u128, check: &str) {
+        let mut i = count;
+        let expected = format!("{}\n\n\nPassed\n", check);
+        while i > 0 {
+            let cur = self.cpu.retired();
+            self.tick(1);
+            if cur != self.cpu.retired() {
+                i -= 1;
+                //self.log_status(L_CPU + L_TIMER);
+                //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
+            }
+
+            if self.serial.buffmt() == expected {
+                return;
+            }
+        }
+    }
+
+    pub fn run(&mut self, control_rx: Option<ControlReceiver>) {
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
         let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);
         let mut animate = Instant::now() + Duration::from_secs_f64(0.5);
@@ -112,6 +134,16 @@ impl Gameboy {
             if Instant::now() > animate {
                 self.ppu.testing = self.ppu.testing.wrapping_add(1);
                 animate = Instant::now() + Duration::from_secs_f64(1.0 / 30.0);
+            }
+            if let Some(rx) = control_rx.as_ref() {
+                match rx.try_recv() {
+                    Ok(ControlMessage::Exit) => {
+                        println!("{}", self.serial.buffmt());
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {}
+                    Err(TryRecvError::Disconnected) => break,
+                }
             }
         }
     }

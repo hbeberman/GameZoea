@@ -1,7 +1,7 @@
-use gamezoea::app::window;
+use gamezoea::app::{control, window};
 use gamezoea::emu::gb::*;
 
-use std::{env, fs, process, thread};
+use std::{env, fs, process, sync::mpsc, thread};
 
 const DEFAULT_SCALE: u32 = 1;
 
@@ -167,7 +167,7 @@ fn run_headless(rom_data: Box<[u8]>, steps: Option<u64>) {
                     gameboy.step(1);
                 }
             }
-            None => gameboy.run(),
+            None => gameboy.run(None),
         }
     });
 
@@ -177,9 +177,10 @@ fn run_headless(rom_data: Box<[u8]>, steps: Option<u64>) {
 fn run_windowed(rom_data: Box<[u8]>, scale: u32) {
     let mut threads = vec![];
     let (frame_tx, frame_rx) = window::create_frame_channel();
+    let (control_tx, control_rx) = mpsc::channel::<control::ControlMessage>();
 
     let window_thread = thread::spawn(move || {
-        if let Err(err) = window::run(scale, frame_rx) {
+        if let Err(err) = window::run(scale, frame_rx, control_tx) {
             eprintln!("Window error: {err}");
         }
     });
@@ -187,7 +188,7 @@ fn run_windowed(rom_data: Box<[u8]>, scale: u32) {
 
     let gameboy_thread = thread::spawn(move || {
         let mut gameboy = Gameboy::dmg(&rom_data, frame_tx);
-        gameboy.run();
+        gameboy.run(Some(control_rx));
     });
     threads.push(gameboy_thread);
 

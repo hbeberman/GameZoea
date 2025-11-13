@@ -1,8 +1,8 @@
 pub use crate::emu::cpu::*;
+use crate::app::control::{ControlMessage, ControlSender};
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture, wgpu::PresentMode};
 use std::{
     collections::VecDeque,
-    process,
     sync::{Arc, mpsc::SyncSender},
     thread,
 };
@@ -32,7 +32,11 @@ pub fn create_frame_channel() -> (FrameSender, std::sync::mpsc::Receiver<Vec<u8>
     std::sync::mpsc::sync_channel(2)
 }
 
-pub fn run(scale: u32, frame_rx: std::sync::mpsc::Receiver<Vec<u8>>) -> Result<(), EventLoopError> {
+pub fn run(
+    scale: u32,
+    frame_rx: std::sync::mpsc::Receiver<Vec<u8>>,
+    control_tx: ControlSender,
+) -> Result<(), EventLoopError> {
     let mut event_loop_builder = EventLoop::<WindowMessage>::with_user_event();
 
     #[cfg(all(target_os = "linux", feature = "wayland"))]
@@ -58,7 +62,7 @@ pub fn run(scale: u32, frame_rx: std::sync::mpsc::Receiver<Vec<u8>>) -> Result<(
         }
     });
 
-    let mut app = WindowApp::new(scale);
+    let mut app = WindowApp::new(scale, control_tx);
     event_loop.run_app(&mut app)
 }
 
@@ -67,10 +71,12 @@ struct WindowApp {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
     frame_queue: VecDeque<Vec<u8>>,
+    control_tx: ControlSender,
+    exit_requested: bool,
 }
 
 impl WindowApp {
-    fn new(scale: u32) -> Self {
+    fn new(scale: u32, control_tx: ControlSender) -> Self {
         let safe_scale = scale.clamp(1, MAX_SCALE);
 
         debug_assert_eq!(
@@ -83,6 +89,8 @@ impl WindowApp {
             window: None,
             pixels: None,
             frame_queue: VecDeque::new(),
+            control_tx,
+            exit_requested: false,
         }
     }
 
@@ -152,19 +160,16 @@ impl ApplicationHandler<WindowMessage> for WindowApp {
 
         match event {
             WindowEvent::CloseRequested => {
-                event_loop.exit();
-                process::exit(0);
+                self.request_exit(event_loop);
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } if key_event.state == ElementState::Pressed => {
                 if let PhysicalKey::Code(KeyCode::Escape) = key_event.physical_key {
-                    event_loop.exit();
-                    process::exit(0);
+                    self.request_exit(event_loop);
                 }
                 if let PhysicalKey::Code(KeyCode::KeyP) = key_event.physical_key {
-                    event_loop.exit();
-                    process::exit(0);
+                    self.request_exit(event_loop);
                 }
             }
             WindowEvent::Resized(size) => {
@@ -244,5 +249,17 @@ impl ApplicationHandler<WindowMessage> for WindowApp {
         }
 
         event_loop.set_control_flow(ControlFlow::Wait);
+    }
+}
+
+impl WindowApp {
+    fn request_exit(&mut self, event_loop: &ActiveEventLoop) {
+        if !self.exit_requested {
+            if self.control_tx.send(ControlMessage::Exit).is_err() {
+                eprintln!("failed to signal exit to emulator");
+            }
+            self.exit_requested = true;
+        }
+        event_loop.exit();
     }
 }
