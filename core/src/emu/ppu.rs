@@ -3,6 +3,7 @@ use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use crate::{bit, isbitset, setbit};
 use std::cell::RefCell;
+use std::fmt;
 use std::rc::Rc;
 
 pub const BLACK: [u8; 4] = [0x29, 0x41, 0x39, 0xFF];
@@ -71,12 +72,45 @@ impl Fetch {
     }
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct Oa {
+    y: u8,
+    x: u8,
+    index: u8,
+    priority: bool,
+    yflip: bool,
+    xflip: bool,
+    dmg_palette: bool,
+    bank: bool,
+    cgb_palette: u8,
+}
+
+impl std::fmt::Display for Oa {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "y:{:02X} x:{:02X} index:{:02X} priority:{} xflip:{} yflip:{} dmg_palette:{} bank:{} cgb_palatte:{}",
+            self.y,
+            self.x,
+            self.index,
+            self.priority,
+            self.yflip,
+            self.xflip,
+            self.dmg_palette,
+            self.bank,
+            self.cgb_palette
+        )
+    }
+}
+
 type TileData = [u8; 16];
 
 #[allow(dead_code)]
 pub struct Ppu {
     frame_tx: Option<FrameSender>,
     mem: Rc<RefCell<Memory>>,
+    objects: Vec<Oa>,
     bg_fifo: Vec<Pixel>,
     obj_fifo: Vec<Pixel>,
     x: u8,
@@ -108,6 +142,7 @@ impl Ppu {
             mem,
             bg_fifo: Vec::<Pixel>::new(),
             obj_fifo: Vec::<Pixel>::new(),
+            objects: Vec::<Oa>::new(),
             x: 0,
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
@@ -141,6 +176,7 @@ impl Ppu {
             mem,
             bg_fifo: Vec::<Pixel>::new(),
             obj_fifo: Vec::<Pixel>::new(),
+            objects: Vec::<Oa>::new(),
             x: 0,
             testing: 0,
             back_buffer: vec![0; FRAME_BYTES],
@@ -206,7 +242,23 @@ impl Ppu {
         self.update_stat();
     }
 
+    pub fn read_oam(&mut self) {
+        let mut addr = 0xFE00;
+        while addr < 0xFEA0 {
+            let oa = self.mem_read_oa(addr);
+            addr += 4;
+            if oa.y == self.ly() {
+                if oa.x != 0 || oa.y != 0 {
+                    eprintln!("OBJECT {}", oa);
+                }
+            }
+        }
+    }
+
     pub fn oamscan(&mut self) {
+        if self.dot == 80 {
+            self.read_oam();
+        }
         self.dot -= 1;
         if self.dot == 0 {
             // Next mode is Drawing
@@ -364,6 +416,24 @@ impl Ppu {
     fn with_mem<R>(&self, f: impl FnOnce(&Memory) -> R) -> R {
         let mem = self.mem.borrow();
         f(&mem)
+    }
+
+    pub fn mem_read_oa(&self, addr: u16) -> Oa {
+        let x = self.with_mem(|mem| mem.dbg_read(addr));
+        let y = self.with_mem(|mem| mem.dbg_read(addr));
+        let index = self.with_mem(|mem| mem.dbg_read(addr));
+        let attr = self.with_mem(|mem| mem.dbg_read(addr));
+        Oa {
+            x,
+            y,
+            index,
+            priority: isbitset!(attr, 7),
+            yflip: isbitset!(attr, 6),
+            xflip: isbitset!(attr, 5),
+            dmg_palette: isbitset!(attr, 4),
+            bank: isbitset!(attr, 3),
+            cgb_palette: attr & 0x03,
+        }
     }
 
     pub fn mem_read(&self, addr: u16) -> u8 {

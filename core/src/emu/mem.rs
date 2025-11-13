@@ -232,7 +232,7 @@ impl Memory {
 
     pub fn mbc_rom_write(&mut self) {
         match &self.mbc {
-            Mbc::None => panic!("Attempted to write to rom on MBC None"),
+            Mbc::None => (),
             Mbc::MBC1 => self.mbc1_register_write(),
             x => todo!(
                 "ROM write on unimplemented MBC:{:?} addr:{:04X}",
