@@ -123,6 +123,25 @@ impl Gameboy {
         }
     }
 
+    pub fn step_mooneye(&mut self, count: u128) {
+        let mut i = count;
+        let pass = [3, 5, 8, 13, 21, 34];
+        let fail = [0x42; 6];
+        while i > 0 {
+            let cur = self.cpu.retired();
+            self.tick(1);
+            if cur != self.cpu.retired() {
+                i -= 1;
+            }
+            if self.serial.buf == pass {
+                return;
+            }
+            if self.serial.buf == fail {
+                panic!("Mooneye test failure!")
+            }
+        }
+    }
+
     pub fn run(&mut self, control_rx: Option<ControlReceiver>) {
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
         let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);
