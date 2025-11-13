@@ -1,7 +1,7 @@
 use crate::app::window::{FrameSender, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
-use crate::{bit, clearbit, isbitset, setbit};
+use crate::{bit, isbitset, setbit};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -38,15 +38,6 @@ impl Mode {
             Mode::M1 => 1,
             Mode::M2 => 2,
             Mode::M3 => 3,
-        }
-    }
-
-    fn next(&self) -> Self {
-        match self {
-            Mode::M0 => Mode::M1,
-            Mode::M1 => Mode::M2,
-            Mode::M2 => Mode::M3,
-            Mode::M3 => Mode::M0,
         }
     }
 }

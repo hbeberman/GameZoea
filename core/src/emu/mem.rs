@@ -17,6 +17,7 @@ enum Mbc {
     HuC3,
 }
 
+#[allow(dead_code)]
 pub struct Memory {
     owner: Comp,
     mbc: Mbc,
