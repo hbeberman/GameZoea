@@ -1,5 +1,6 @@
 pub use crate::emu::cpu::*;
 use crate::app::control::{ControlMessage, ControlSender};
+use crate::emu::joypad::JoypadButton;
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture, wgpu::PresentMode};
 use std::{
     collections::VecDeque,
@@ -162,14 +163,26 @@ impl ApplicationHandler<WindowMessage> for WindowApp {
             WindowEvent::CloseRequested => {
                 self.request_exit(event_loop);
             }
-            WindowEvent::KeyboardInput {
-                event: key_event, ..
-            } if key_event.state == ElementState::Pressed => {
-                if let PhysicalKey::Code(KeyCode::Escape) = key_event.physical_key {
-                    self.request_exit(event_loop);
+            WindowEvent::KeyboardInput { event: key_event, .. } => {
+                if key_event.state == ElementState::Pressed {
+                    match key_event.physical_key {
+                        PhysicalKey::Code(KeyCode::Escape)
+                        | PhysicalKey::Code(KeyCode::KeyP) => {
+                            self.request_exit(event_loop);
+                        }
+                        _ => {}
+                    }
                 }
-                if let PhysicalKey::Code(KeyCode::KeyP) = key_event.physical_key {
-                    self.request_exit(event_loop);
+
+                if let Some(button) = map_key_to_joypad_button(&key_event.physical_key) {
+                    let pressed = key_event.state == ElementState::Pressed;
+                    if self
+                        .control_tx
+                        .send(ControlMessage::JoypadInput { button, pressed })
+                        .is_err()
+                    {
+                        eprintln!("failed to send joypad input");
+                    }
                 }
             }
             WindowEvent::Resized(size) => {
@@ -261,5 +274,19 @@ impl WindowApp {
             self.exit_requested = true;
         }
         event_loop.exit();
+    }
+}
+
+fn map_key_to_joypad_button(key: &PhysicalKey) -> Option<JoypadButton> {
+    match key {
+        PhysicalKey::Code(KeyCode::KeyW) => Some(JoypadButton::Up),
+        PhysicalKey::Code(KeyCode::KeyA) => Some(JoypadButton::Left),
+        PhysicalKey::Code(KeyCode::KeyS) => Some(JoypadButton::Down),
+        PhysicalKey::Code(KeyCode::KeyD) => Some(JoypadButton::Right),
+        PhysicalKey::Code(KeyCode::KeyJ) => Some(JoypadButton::A),
+        PhysicalKey::Code(KeyCode::KeyK) => Some(JoypadButton::B),
+        PhysicalKey::Code(KeyCode::KeyQ) => Some(JoypadButton::Start),
+        PhysicalKey::Code(KeyCode::KeyE) => Some(JoypadButton::Select),
+        _ => None,
     }
 }

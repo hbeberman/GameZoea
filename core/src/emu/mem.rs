@@ -65,7 +65,7 @@ impl Memory {
         let rom_bank_count = Memory::rom_bank_count_decode(cartridge);
         let ram_bank_count = Memory::ram_bank_count_decode(cartridge);
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
-        mem[0xFF00] = 0xFF; // Stub Joypad
+        mem[0xFF00] = 0xCF; // Joypad register defaults to all released
         let mem = Memory {
             owner: Comp::Cpu,
             mbc,
@@ -159,7 +159,13 @@ impl Memory {
             0xFE00..0xFEA0 => self.write_oam(addr, data),
             0xFEA0..0xFF00 => (), // Not Usable
             0xFF00 => {
-                self.mem[addr as usize] = self.mem[addr as usize] & 0x14 | data & 0x20;
+                if self.owner == Comp::Cpu {
+                    let current = self.mem[addr as usize] & 0x0F;
+                    let select = data & 0x30;
+                    self.mem[addr as usize] = 0xC0 | select | current;
+                } else {
+                    self.mem[addr as usize] = data;
+                }
             }
             0xFF04 => {
                 self.mem[addr as usize] = 0;

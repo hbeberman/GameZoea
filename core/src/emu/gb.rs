@@ -3,6 +3,7 @@ use crate::app::{
     window::*,
 };
 use crate::emu::cpu::Cpu;
+use crate::emu::joypad::Joypad;
 use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
 use crate::emu::serial::Serial;
@@ -37,6 +38,7 @@ pub struct Gameboy {
     pub ppu: Ppu,
     pub timer: Timer,
     pub serial: Serial,
+    pub joypad: Joypad,
     mem: Rc<RefCell<Memory>>,
 }
 
@@ -49,6 +51,7 @@ impl Gameboy {
             ppu: Ppu::headless_dmg(mem.clone()),
             timer: Timer::init_dmg(mem.clone()),
             serial: Serial::init_dmg(mem.clone()),
+            joypad: Joypad::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -61,6 +64,7 @@ impl Gameboy {
             ppu: Ppu::headless_dmg(mem.clone()),
             timer: Timer::init_dmg(mem.clone()),
             serial: Serial::init_dmg(mem.clone()),
+            joypad: Joypad::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -73,6 +77,7 @@ impl Gameboy {
             ppu: Ppu::init_dmg(frame_tx, mem.clone()),
             timer: Timer::init_dmg(mem.clone()),
             serial: Serial::init_dmg(mem.clone()),
+            joypad: Joypad::init_dmg(mem.clone()),
             mem,
         }
     }
@@ -84,11 +89,12 @@ impl Gameboy {
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);
             self.serial.tick(self.t);
+            self.joypad.tick(self.t);
             self.t += 1;
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
-                self.log_status(L_CPU + L_TIMER + L_MEM);
+                //       self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
@@ -156,13 +162,18 @@ impl Gameboy {
                 animate = Instant::now() + Duration::from_secs_f64(1.0 / 30.0);
             }
             if let Some(rx) = control_rx.as_ref() {
-                match rx.try_recv() {
-                    Ok(ControlMessage::Exit) => {
-                        println!("{}", self.serial.buffmt());
-                        break;
+                loop {
+                    match rx.try_recv() {
+                        Ok(ControlMessage::Exit) => {
+                            println!("{}", self.serial.buffmt());
+                            return;
+                        }
+                        Ok(ControlMessage::JoypadInput { button, pressed }) => {
+                            self.joypad.enqueue_input(button, pressed);
+                        }
+                        Err(TryRecvError::Empty) => break,
+                        Err(TryRecvError::Disconnected) => return,
                     }
-                    Err(TryRecvError::Empty) => {}
-                    Err(TryRecvError::Disconnected) => break,
                 }
             }
         }
@@ -242,7 +253,7 @@ impl Gameboy {
         };
 
         let memstr = if mem {
-            let addr = [0xFF00];
+            let addr = [0xFF00, 0xFF0F, 0xFFFF];
             let s = format!(
                 "||{}",
                 addr.iter()

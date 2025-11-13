@@ -408,6 +408,7 @@ impl Cpu {
                 } else if hit & 0x10 != 0 {
                     self.mem_dbg_write(0xFF0F, reg_if & !0x10);
                     self.push_pc(0x0060);
+                    eprintln!("JOYPAD!!!!!!!!!!!!!!!!!!!!!!!!");
                     Cpu::int_joypad
                 } else {
                     panic!("Invalid value in interrupt registers");
@@ -1062,7 +1063,7 @@ impl Cpu {
                 let r8_dest = R8::from((self.ir() & M543) >> 3);
                 self.set_r8(r8_dest, self.r8(r8_source));
                 if r8_source == r8_dest && r8_source == R8::B {
-                    self.dbg_break += 1;
+                    //self.dbg_break += 1;
                 }
                 self.fetch_next();
             }
