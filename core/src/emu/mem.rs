@@ -1,6 +1,11 @@
 use crate::emu::gb::Comp;
 use crate::emu::regs::*;
 
+const DMA_TRANSFER_CYCLES: usize = 160 * 4;
+const DMA_START_DELAY_CYCLES: u8 = 8;
+const OAM_START: usize = 0xFE00;
+const OAM_LEN: usize = 0xA0;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 enum Mbc {
@@ -21,6 +26,9 @@ enum Mbc {
 pub struct Memory {
     owner: Comp,
     dma: usize,
+    dma_start_delay: u8,
+    dma_delay_block: bool,
+    dma_source: Option<usize>,
     oam_busy: bool,
     vram_busy: bool,
     mbc: Mbc,
@@ -45,6 +53,9 @@ impl Memory {
         Memory {
             owner: Comp::Cpu,
             dma: 0,
+            dma_start_delay: 0,
+            dma_delay_block: false,
+            dma_source: None,
             oam_busy: false,
             vram_busy: false,
             mbc: Mbc::None,
@@ -74,6 +85,9 @@ impl Memory {
         let mem = Memory {
             owner: Comp::Cpu,
             dma: 0,
+            dma_start_delay: 0,
+            dma_delay_block: false,
+            dma_source: None,
             oam_busy: false,
             vram_busy: false,
             mbc,
@@ -133,7 +147,7 @@ impl Memory {
     pub fn read(&mut self) {
         let addr = self.addr;
         if self.owner == Comp::Cpu {
-            if self.dma != 0 && addr < 0xFF00 {
+            if self.dma_blocks_cpu(addr) {
                 self.data = 0xFF;
                 return;
             }
@@ -146,7 +160,7 @@ impl Memory {
                 return;
             }
         }
-        if self.owner == Comp::Ppu && self.dma != 0 && (0xFE00..0xFEA0).contains(&addr) {
+        if self.owner == Comp::Ppu && self.dma_blocks_oam(addr) {
             self.data = 0xFF;
             return;
         }
@@ -177,14 +191,14 @@ impl Memory {
                 return;
             }
             if addr == DMA {
-                self.dma = 640;
-                let start = (self.data as usize) << 8;
-                let end = start + 0xA0;
-
-                let (left, right) = self.mem.split_at_mut(0xFE00);
-                right[..0xA0].copy_from_slice(&left[start..end]);
+                let start = (data as usize) << 8;
+                let was_blocking = self.dma_bus_blocked();
+                self.dma_start_delay = DMA_START_DELAY_CYCLES;
+                self.dma_delay_block = was_blocking;
+                self.dma_source = Some(start);
+                self.dma = DMA_TRANSFER_CYCLES;
             }
-            if self.dma != 0 && addr < 0xFF00 {
+            if self.dma_blocks_cpu(addr) {
                 return;
             }
             if self.oam_busy && (0xFE00..0xFEA0).contains(&addr) {
@@ -194,7 +208,7 @@ impl Memory {
                 return;
             }
         }
-        if self.owner == Comp::Ppu && self.dma != 0 && (0xFE00..0xFEA0).contains(&addr) {
+        if self.owner == Comp::Ppu && self.dma_blocks_oam(addr) {
             return;
         }
 
@@ -202,9 +216,27 @@ impl Memory {
             0x0000..0x8000 => self.mbc_rom_write(),
             0x8000..0xA000 => self.mem[addr as usize] = data, // 8 KiB VRAM (GBC Bank 00-01)
             0xA000..0xC000 => self.mem[addr as usize] = data, // 8 KiB External RAM
-            0xC000..0xD000 => self.mem[addr as usize] = data, // 4 KiB Work RAM
-            0xD000..0xE000 => self.mem[addr as usize] = data, // 4 KiB Work RAM (GBC Bank 01-07)
-            0xE000..0xFE00 => self.mem[(addr & 0x3FFF) as usize] = data, // Echo Ram
+            0xC000..0xD000 => {
+                self.mem[addr as usize] = data; // 4 KiB Work RAM
+                let echo = addr + 0x2000;
+                if echo < 0xFE00 {
+                    self.mem[echo as usize] = data;
+                }
+            }
+            0xD000..0xE000 => {
+                self.mem[addr as usize] = data; // 4 KiB Work RAM (GBC Bank 01-07)
+                if addr < 0xDE00 {
+                    let echo = addr + 0x2000;
+                    if echo < 0xFE00 {
+                        self.mem[echo as usize] = data;
+                    }
+                }
+            }
+            0xE000..0xFE00 => {
+                let base = (addr - 0x2000) as usize;
+                self.mem[base] = data; // Echo Ram mirrors C000-DDFF
+                self.mem[addr as usize] = data;
+            }
             0xFE00..0xFEA0 => self.write_oam(addr, data),
             0xFEA0..0xFF00 => (), // Not Usable
             P1 => {
@@ -292,7 +324,7 @@ impl Memory {
                 }
             }
             Comp::Ppu => {
-                if self.dma != 0 {
+                if self.dma_bus_blocked() {
                     return 0xFF;
                 }
             }
@@ -308,7 +340,18 @@ impl Memory {
         self.mem[addr as usize] = data
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, _t: u128) {
+        if self.dma_start_delay > 0 {
+            self.dma_start_delay -= 1;
+            if self.dma_start_delay == 0 {
+                if let Some(start) = self.dma_source.take() {
+                    self.copy_oam_from(start);
+                }
+                self.dma_delay_block = false;
+            }
+            return;
+        }
+
         if self.dma != 0 {
             self.dma -= 1;
         }
@@ -320,6 +363,28 @@ impl Memory {
 
     pub fn set_vram_busy(&mut self, vram_busy: bool) {
         self.vram_busy = vram_busy;
+    }
+
+    fn dma_blocks_cpu(&self, addr: u16) -> bool {
+        addr < 0xFF00 && self.dma_bus_blocked()
+    }
+
+    fn dma_blocks_oam(&self, addr: u16) -> bool {
+        (0xFE00..0xFEA0).contains(&addr) && self.dma_bus_blocked()
+    }
+
+    fn dma_bus_blocked(&self) -> bool {
+        if self.dma_start_delay > 0 {
+            self.dma_delay_block
+        } else {
+            self.dma != 0
+        }
+    }
+
+    fn copy_oam_from(&mut self, start: usize) {
+        let end = start + OAM_LEN;
+        let (left, right) = self.mem.split_at_mut(OAM_START);
+        right[..OAM_LEN].copy_from_slice(&left[start..end]);
     }
 
     pub fn mbc_rom_write(&mut self) {

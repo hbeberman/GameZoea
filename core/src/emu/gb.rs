@@ -87,7 +87,7 @@ impl Gameboy {
         for _ in 0..count {
             let cur = self.cpu.retired();
 
-            self.with_mem_mut(|mem| mem.tick());
+            self.with_mem_mut(|mem| mem.tick(self.t));
             self.timer.tick(self.t);
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);

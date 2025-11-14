@@ -200,22 +200,19 @@ mod tests {
         "tests/roms/mooneye/acceptance/oam_dma/reg_read.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
+        #[ignore = "TODO: implement MBC 1B"]
         mooneye_acceptance_oam_dma_sources_gs_gb,
         "tests/roms/mooneye/acceptance/oam_dma/sources-GS.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_oam_dma_restart_gb,
         "tests/roms/mooneye/acceptance/oam_dma_restart.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_oam_dma_start_gb,
         "tests/roms/mooneye/acceptance/oam_dma_start.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_oam_dma_timing_gb,
         "tests/roms/mooneye/acceptance/oam_dma_timing.gb"
     );
