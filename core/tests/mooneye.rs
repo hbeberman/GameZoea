@@ -120,7 +120,6 @@ mod tests {
         "tests/roms/mooneye/acceptance/call_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_call_timing2_gb,
         "tests/roms/mooneye/acceptance/call_timing2.gb"
     );
@@ -285,7 +284,6 @@ mod tests {
     );
     */
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_push_timing_gb,
         "tests/roms/mooneye/acceptance/push_timing.gb"
     );
@@ -314,7 +312,6 @@ mod tests {
         "tests/roms/mooneye/acceptance/reti_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_rst_timing_gb,
         "tests/roms/mooneye/acceptance/rst_timing.gb"
     );

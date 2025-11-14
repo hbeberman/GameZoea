@@ -97,7 +97,7 @@ impl Gameboy {
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
-                self.log_status(L_CPU + L_TIMER + L_MEM);
+                //   self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
