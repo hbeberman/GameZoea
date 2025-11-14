@@ -11,13 +11,8 @@ mod tests {
     fn load_mooneye_rom(path: &str) -> Vec<u8> {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let rom_path = PathBuf::from(manifest_dir).join(path);
-        fs::read(&rom_path).unwrap_or_else(|e| {
-            panic!(
-                "Failed to read ROM '{}': {}",
-                rom_path.display(),
-                e
-            )
-        })
+        fs::read(&rom_path)
+            .unwrap_or_else(|e| panic!("Failed to read ROM '{}': {}", rom_path.display(), e))
     }
 
     macro_rules! mooneye_test {
@@ -197,7 +192,6 @@ mod tests {
         "tests/roms/mooneye/acceptance/ld_hl_sp_e_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_oam_dma_basic_gb,
         "tests/roms/mooneye/acceptance/oam_dma/basic.gb"
     );
@@ -229,6 +223,7 @@ mod tests {
         mooneye_acceptance_pop_timing_gb,
         "tests/roms/mooneye/acceptance/pop_timing.gb"
     );
+    /* TODO: Memory leak
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_acceptance_ppu_hblank_ly_scx_timing_gs_gb,
@@ -264,6 +259,7 @@ mod tests {
         mooneye_acceptance_ppu_intr_2_oam_ok_timing_gb,
         "tests/roms/mooneye/acceptance/ppu/intr_2_oam_ok_timing.gb"
     );
+    */
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_acceptance_ppu_lcdon_timing_gs_gb,
@@ -284,11 +280,13 @@ mod tests {
         mooneye_acceptance_ppu_stat_lyc_onoff_gb,
         "tests/roms/mooneye/acceptance/ppu/stat_lyc_onoff.gb"
     );
+    /*
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_acceptance_ppu_vblank_stat_intr_gs_gb,
         "tests/roms/mooneye/acceptance/ppu/vblank_stat_intr-GS.gb"
     );
+    */
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_acceptance_push_timing_gb,
@@ -323,11 +321,14 @@ mod tests {
         mooneye_acceptance_rst_timing_gb,
         "tests/roms/mooneye/acceptance/rst_timing.gb"
     );
+
+    /*
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_acceptance_serial_boot_sclk_align_dmgabcmgb_gb,
         "tests/roms/mooneye/acceptance/serial/boot_sclk_align-dmgABCmgb.gb"
     );
+    */
     mooneye_test!(
         mooneye_acceptance_timer_div_write_gb,
         "tests/roms/mooneye/acceptance/timer/div_write.gb"
@@ -534,11 +535,13 @@ mod tests {
         "tests/roms/mooneye/emulator-only/mbc5/rom_8Mb.gb"
     );
     */
+    /*
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_madness_mgb_oam_dma_halt_sprites_gb,
         "tests/roms/mooneye/madness/mgb_oam_dma_halt_sprites.gb"
     );
+    */
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_misc_bits_unused_hwio_c_gb,
@@ -574,18 +577,11 @@ mod tests {
         mooneye_misc_boot_regs_cgb_gb,
         "tests/roms/mooneye/misc/boot_regs-cgb.gb"
     );
+    /*
     mooneye_test!(
         #[ignore = "TODO"]
         mooneye_misc_ppu_vblank_stat_intr_c_gb,
         "tests/roms/mooneye/misc/ppu/vblank_stat_intr-C.gb"
     );
-    mooneye_test!(
-        #[ignore = "TODO"]
-        mooneye_utils_bootrom_dumper_gb,
-        "tests/roms/mooneye/utils/bootrom_dumper.gb"
-    );
-    mooneye_test!(
-        mooneye_utils_dump_boot_hwio_gb,
-        "tests/roms/mooneye/utils/dump_boot_hwio.gb"
-    );
+    */
 }

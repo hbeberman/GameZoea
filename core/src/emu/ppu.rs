@@ -254,6 +254,8 @@ impl Ppu {
         if self.dot == 0 {
             // Next mode is Drawing
             self.mode = Mode::M3;
+            self.set_oam_busy(false);
+            self.set_vram_busy(true);
             self.dot = 289;
             //           eprintln!("Entering Drawing mode:{:?} dot:#{}", self.mode, self.dot);
         }
@@ -280,6 +282,7 @@ impl Ppu {
             } else {
                 // Next mode is OAM scan
                 self.mode = Mode::M2;
+                self.set_oam_busy(true);
                 /*
                                 eprintln!(
                                     "Entering OAM mode:{:?} dot:#{} ly:#{}",
@@ -298,6 +301,7 @@ impl Ppu {
         self.dot -= 1;
         if u32::from(self.x) >= SCREEN_WIDTH {
             self.mode = Mode::M0;
+            self.set_vram_busy(false);
             //eprintln!("Entering HBLANK mode:{:?} dot:#{}", self.mode, self.dot);
             self.dot += 87;
         }
@@ -423,6 +427,14 @@ impl Ppu {
             bank: isbitset!(attr, 3),
             cgb_palette: attr & 0x03,
         }
+    }
+
+    pub fn set_oam_busy(&self, oam_busy: bool) {
+        self.with_mem_mut(|mem| mem.set_oam_busy(oam_busy))
+    }
+
+    pub fn set_vram_busy(&self, vram_busy: bool) {
+        self.with_mem_mut(|mem| mem.set_vram_busy(vram_busy))
     }
 
     pub fn mem_read(&self, addr: u16) -> u8 {

@@ -86,6 +86,8 @@ impl Gameboy {
     pub fn tick(&mut self, count: u128) {
         for _ in 0..count {
             let cur = self.cpu.retired();
+
+            self.with_mem_mut(|mem| mem.tick());
             self.timer.tick(self.t);
             self.cpu.tick(self.t);
             self.ppu.tick(self.t);
@@ -95,7 +97,7 @@ impl Gameboy {
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
-                //       self.log_status(L_CPU + L_TIMER + L_MEM);
+                self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
@@ -276,5 +278,10 @@ impl Gameboy {
 
     pub fn mem_dbg_read(&self, addr: u16) -> u8 {
         self.with_mem(|mem| mem.dbg_read(addr))
+    }
+
+    fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
+        let mut mem = self.mem.borrow_mut();
+        f(&mut mem)
     }
 }

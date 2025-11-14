@@ -20,6 +20,9 @@ enum Mbc {
 #[allow(dead_code)]
 pub struct Memory {
     owner: Comp,
+    dma: usize,
+    oam_busy: bool,
+    vram_busy: bool,
     mbc: Mbc,
     mem: [u8; 0x10000],
     cartridge: Vec<u8>,
@@ -41,6 +44,9 @@ impl Memory {
     pub fn empty() -> Self {
         Memory {
             owner: Comp::Cpu,
+            dma: 0,
+            oam_busy: false,
+            vram_busy: false,
             mbc: Mbc::None,
             mem: [0u8; 0x10000],
             cartridge: [0u8; 0x10000].to_vec(),
@@ -67,6 +73,9 @@ impl Memory {
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
         let mem = Memory {
             owner: Comp::Cpu,
+            dma: 0,
+            oam_busy: false,
+            vram_busy: false,
             mbc,
             mem,
             cartridge: cartridge.to_vec(),
@@ -122,10 +131,29 @@ impl Memory {
     }
 
     pub fn read(&mut self) {
+        let addr = self.addr;
+        if self.owner == Comp::Cpu {
+            if self.dma != 0 && addr < 0xFF00 {
+                self.data = 0xFF;
+                return;
+            }
+            if self.oam_busy && (0xFE00..0xFEA0).contains(&addr) {
+                self.data = 0xFF;
+                return;
+            }
+            if self.vram_busy && (0x8000..0xA000).contains(&addr) {
+                self.data = 0xFF;
+                return;
+            }
+        }
+        if self.owner == Comp::Ppu && self.dma != 0 && (0xFE00..0xFEA0).contains(&addr) {
+            self.data = 0xFF;
+            return;
+        }
         self.data = match self.addr {
             0x0000..=0x7FFF => self.mbc_read(),
             0xA000..=0xBFFF => self.mbc_read(),
-            _ => self.mem[self.addr as usize],
+            _ => self.mem[addr as usize],
         }
     }
 
@@ -144,9 +172,32 @@ impl Memory {
         let addr = self.addr();
         let data = self.data();
 
-        if self.owner == Comp::Cpu && self.tima_overflow && addr == TIMA {
+        if self.owner == Comp::Cpu {
+            if self.tima_overflow && addr == TIMA {
+                return;
+            }
+            if addr == DMA {
+                self.dma = 640;
+                let start = (self.data as usize) << 8;
+                let end = start + 0xA0;
+
+                let (left, right) = self.mem.split_at_mut(0xFE00);
+                right[..0xA0].copy_from_slice(&left[start..end]);
+            }
+            if self.dma != 0 && addr < 0xFF00 {
+                return;
+            }
+            if self.oam_busy && (0xFE00..0xFEA0).contains(&addr) {
+                return;
+            }
+            if self.vram_busy && (0x8000..0xA000).contains(&addr) {
+                return;
+            }
+        }
+        if self.owner == Comp::Ppu && self.dma != 0 && (0xFE00..0xFEA0).contains(&addr) {
             return;
         }
+
         match addr {
             0x0000..0x8000 => self.mbc_rom_write(),
             0x8000..0xA000 => self.mem[addr as usize] = data, // 8 KiB VRAM (GBC Bank 00-01)
@@ -233,8 +284,42 @@ impl Memory {
         result
     }
 
+    pub fn read_vram(&mut self, addr: u16) -> u8 {
+        match self.owner {
+            Comp::Cpu => {
+                if self.vram_busy {
+                    return 0xFF;
+                }
+            }
+            Comp::Ppu => {
+                if self.dma != 0 {
+                    return 0xFF;
+                }
+            }
+            _ => (),
+        };
+        self.mem[addr as usize]
+    }
+
     pub fn write_oam(&mut self, addr: u16, data: u8) {
-        self.mem[addr as usize] = data // 4 KiB Work RAM (GBC Bank 01-07)
+        if self.owner == Comp::Cpu && (self.oam_busy || self.vram_busy) {
+            return;
+        }
+        self.mem[addr as usize] = data
+    }
+
+    pub fn tick(&mut self) {
+        if self.dma != 0 {
+            self.dma -= 1;
+        }
+    }
+
+    pub fn set_oam_busy(&mut self, oam_busy: bool) {
+        self.oam_busy = oam_busy;
+    }
+
+    pub fn set_vram_busy(&mut self, vram_busy: bool) {
+        self.vram_busy = vram_busy;
     }
 
     pub fn mbc_rom_write(&mut self) {
