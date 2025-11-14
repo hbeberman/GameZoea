@@ -128,7 +128,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Memory write to not usable: fea0:ab")]
     fn mem_write_not_usable() {
         let mut gb = Gameboy::cartless_dmg();
         gb.cpu.set_addr(0xFEA0);

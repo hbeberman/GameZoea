@@ -1,6 +1,7 @@
 use crate::app::window::{FrameSender, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
+use crate::emu::regs::*;
 use crate::{bit, isbitset, setbit};
 use std::cell::RefCell;
 use std::fmt;
@@ -12,17 +13,6 @@ pub const LIGHT_GREY: [u8; 4] = [0x5A, 0x79, 0x42, 0xFF];
 pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
 const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
-
-const IFLAG: u16 = 0xFF0F;
-const LCDC: u16 = 0xFF40;
-const STAT: u16 = 0xFF41;
-const SCY: u16 = 0xFF42;
-const SCX: u16 = 0xFF43;
-const LY: u16 = 0xFF44;
-const LYC: u16 = 0xFF45;
-const BGP: u16 = 0xFF47;
-const WY: u16 = 0xFF4A;
-const WX: u16 = 0xFF4B; // TODO: pandocs say WX0 and WX116 are weird
 
 #[derive(Debug, PartialEq, Clone)]
 enum Mode {
@@ -284,7 +274,7 @@ impl Ppu {
                                     self.mode, self.dot, ly
                                 );
                 */
-                let intflags = self.mem_read(IFLAG) | 0x1;
+                let intflags = self.mem_read(IF) | 0x1;
                 self.mem_write(0xFF0F, intflags);
                 456
             } else {
@@ -376,8 +366,6 @@ impl Ppu {
     }
 
     pub fn read_whole_tile_data(&mut self, obj: bool, id: u8, _bank: u8) -> TileData {
-        // TODO: Check if PPU access to VRAM is blocked, if so return 0xFF
-
         let lcdc = self.mem_read(LCDC);
         let addr = if obj || isbitset!(lcdc, 4) {
             0x8000 + ((id as u16) * 16)
@@ -477,11 +465,11 @@ impl Ppu {
     }
 
     pub fn set_lyc(&mut self, lyc: u8) {
-        self.mem_write(0xFF45, lyc)
+        self.mem_write(LYC, lyc)
     }
 
     pub fn stat(&self) -> u8 {
-        self.mem_read(0xFF41)
+        self.mem_read(STAT)
     }
 
     pub fn update_stat(&mut self) {
@@ -505,9 +493,9 @@ impl Ppu {
         if hit {
             if !self.already_interrupted {
                 self.already_interrupted = true;
-                let mut reg_if = self.mem_read(IFLAG);
+                let mut reg_if = self.mem_read(IF);
                 setbit!(reg_if, 2);
-                self.mem_write(IFLAG, reg_if);
+                self.mem_write(IF, reg_if);
             }
         } else {
             self.already_interrupted = false;

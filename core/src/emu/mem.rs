@@ -1,5 +1,5 @@
 use crate::emu::gb::Comp;
-use crate::emu::timer::*;
+use crate::emu::regs::*;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -65,7 +65,6 @@ impl Memory {
         let rom_bank_count = Memory::rom_bank_count_decode(cartridge);
         let ram_bank_count = Memory::ram_bank_count_decode(cartridge);
         mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
-        mem[0xFF00] = 0xCF; // Joypad register defaults to all released
         let mem = Memory {
             owner: Comp::Cpu,
             mbc,
@@ -92,7 +91,7 @@ impl Memory {
     }
 
     fn mbc_decode(cartridge: &[u8]) -> (Mbc, u8) {
-        let cartridge_type = cartridge[0x147];
+        let cartridge_type = cartridge[CART_TYPE];
         let mbc = match cartridge_type {
             0x00 => Mbc::None,
             0x01..=0x03 => Mbc::MBC1,
@@ -103,7 +102,7 @@ impl Memory {
     }
 
     fn rom_bank_count_decode(cartridge: &[u8]) -> u16 {
-        let val = cartridge[0x0148];
+        let val = cartridge[CART_SIZE];
         match val {
             0x00..=0x08 => 0b1 << (val + 1),
             x => panic!("Invalid rom size value:{:02X}", x),
@@ -111,7 +110,7 @@ impl Memory {
     }
 
     fn ram_bank_count_decode(cartridge: &[u8]) -> u8 {
-        let val = cartridge[0x0149];
+        let val = cartridge[CART_RAM];
         match val {
             0x00 => 0,
             0x02 => 1,
@@ -149,7 +148,6 @@ impl Memory {
             return;
         }
         match addr {
-            // 0x8000 => panic!("MEM WRITE!!!! data:{:02X}", data),
             0x0000..0x8000 => self.mbc_rom_write(),
             0x8000..0xA000 => self.mem[addr as usize] = data, // 8 KiB VRAM (GBC Bank 00-01)
             0xA000..0xC000 => self.mem[addr as usize] = data, // 8 KiB External RAM
@@ -158,7 +156,7 @@ impl Memory {
             0xE000..0xFE00 => self.mem[(addr & 0x3FFF) as usize] = data, // Echo Ram
             0xFE00..0xFEA0 => self.write_oam(addr, data),
             0xFEA0..0xFF00 => (), // Not Usable
-            0xFF00 => {
+            P1 => {
                 if self.owner == Comp::Cpu {
                     let current = self.mem[addr as usize] & 0x0F;
                     let select = data & 0x30;
@@ -167,11 +165,11 @@ impl Memory {
                     self.mem[addr as usize] = data;
                 }
             }
-            0xFF04 => {
+            DIV => {
                 self.mem[addr as usize] = 0;
                 self.write_div = true;
             }
-            0xFF07 => self.set_tac(data),
+            TAC => self.set_tac(data),
             0xFF01..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
             0xFFFF => self.mem[addr as usize] = data,         // Interrupt Enable

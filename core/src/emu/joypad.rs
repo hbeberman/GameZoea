@@ -1,13 +1,10 @@
 use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
+use crate::emu::regs::*;
 use crate::{bit, setbit};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
-
-const IFLAG: u16 = 0xFF0F;
-
-pub const P1: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JoypadButton {
@@ -136,9 +133,9 @@ impl Joypad {
         self.update_p1();
 
         if request_interrupt {
-            let mut reg_if = self.mem_read(IFLAG);
+            let mut reg_if = self.mem_read(IF);
             setbit!(reg_if, 4);
-            self.mem_write(IFLAG, reg_if);
+            self.mem_write(IF, reg_if);
         }
     }
 

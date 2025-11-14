@@ -6,6 +6,7 @@ use crate::emu::cpu::Cpu;
 use crate::emu::joypad::Joypad;
 use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
+use crate::emu::regs::*;
 use crate::emu::serial::Serial;
 use crate::emu::timer::*;
 use std::cell::RefCell;
@@ -243,17 +244,17 @@ impl Gameboy {
         let timerstr = if timer {
             format!(
                 "|| DIV:{:02X} TIMA:{:02X} TMA:{:02X} TAC:{:02X} ",
-                self.mem_dbg_read(0xFF04),
-                self.mem_dbg_read(0xFF05),
-                self.mem_dbg_read(0xFF06),
-                self.mem_dbg_read(0xFF07)
+                self.mem_dbg_read(DIV),
+                self.mem_dbg_read(TIMA),
+                self.mem_dbg_read(TMA),
+                self.mem_dbg_read(TAC)
             )
         } else {
             String::new()
         };
 
         let memstr = if mem {
-            let addr = [0xFF00, 0xFF0F, 0xFFFF];
+            let addr = [P1, IF, IE];
             let s = format!(
                 "||{}",
                 addr.iter()
