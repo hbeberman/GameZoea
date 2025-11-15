@@ -3282,11 +3282,11 @@ impl Cpu {
     }
 
     pub fn inc_sp(&mut self) {
-        self.r.sp += 1;
+        self.r.sp = self.r.sp.wrapping_add(1);
     }
 
     pub fn dec_sp(&mut self) {
-        self.r.sp -= 1;
+        self.r.sp = self.r.sp.wrapping_sub(1);
     }
 
     pub fn set_pc(&mut self, pc: u16) {
