@@ -153,13 +153,41 @@ impl Gameboy {
     }
 
     pub fn run(&mut self, control_rx: Option<ControlReceiver>) {
+        self.run_with_deadline(control_rx, None);
+    }
+
+    pub fn run_for(&mut self, control_rx: Option<ControlReceiver>, duration: Duration) {
+        self.run_with_deadline(control_rx, Some(duration));
+    }
+
+    fn run_with_deadline(
+        &mut self,
+        control_rx: Option<ControlReceiver>,
+        limit: Option<Duration>,
+    ) {
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
         let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);
         let mut animate = Instant::now() + Duration::from_secs_f64(0.5);
+        let stop_time = limit.map(|d| Instant::now() + d);
+
         loop {
+            if let Some(limit) = stop_time {
+                if Instant::now() >= limit {
+                    println!("{}", self.serial.buffmt());
+                    return;
+                }
+            }
+
             self.tick(1);
             let target = Instant::now() + normal_cycle;
-            while Instant::now() < target {}
+            while Instant::now() < target {
+                if let Some(limit) = stop_time {
+                    if Instant::now() >= limit {
+                        println!("{}", self.serial.buffmt());
+                        return;
+                    }
+                }
+            }
             if Instant::now() > animate {
                 self.ppu.testing = self.ppu.testing.wrapping_add(1);
                 animate = Instant::now() + Duration::from_secs_f64(1.0 / 30.0);

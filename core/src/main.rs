@@ -1,12 +1,12 @@
 use gamezoea::app::{control, window};
 use gamezoea::emu::gb::*;
 
-use std::{env, fs, process, sync::mpsc, thread};
+use std::{env, fs, process, sync::mpsc, thread, time::Duration};
 
 const DEFAULT_SCALE: u32 = 1;
 
 fn main() {
-    let (scale, rom, steps) = parse_args();
+    let (scale, rom, steps, run_duration) = parse_args();
 
     let rom_path = match rom {
         Some(rom) => {
@@ -48,21 +48,32 @@ fn main() {
 
     let rom_data = rom_bytes.into_boxed_slice();
 
+    if run_duration.is_some() && scale != 0 {
+        eprintln!("--seconds is only supported when running headless (--scale 0)");
+        return;
+    }
+
     if scale == 0 {
-        run_headless(rom_data, steps);
+        run_headless(rom_data, steps, run_duration);
         return;
     }
 
     run_windowed(rom_data, scale);
 }
 
-fn parse_args() -> (u32, Option<std::path::PathBuf>, Option<u64>) {
+fn parse_args() -> (
+    u32,
+    Option<std::path::PathBuf>,
+    Option<u64>,
+    Option<Duration>,
+) {
     let mut args = env::args();
     let _ = args.next();
 
     let mut scale = DEFAULT_SCALE;
     let mut path = None;
     let mut steps = None;
+    let mut seconds = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -86,6 +97,23 @@ fn parse_args() -> (u32, Option<std::path::PathBuf>, Option<u64>) {
                             "Scale {scale} is outside the supported range 0..={}",
                             window::MAX_SCALE
                         );
+                        usage();
+                        process::exit(1);
+                    }
+                };
+            }
+
+            "--seconds" => {
+                let value = args.next().unwrap_or_else(|| {
+                    eprintln!("Missing value for {arg}");
+                    usage();
+                    process::exit(1);
+                });
+
+                seconds = match value.parse::<f64>() {
+                    Ok(n) if n.is_sign_positive() && n > 0.0 => Some(n),
+                    _ => {
+                        eprintln!("Invalid seconds value: {value}");
                         usage();
                         process::exit(1);
                     }
@@ -146,7 +174,13 @@ fn parse_args() -> (u32, Option<std::path::PathBuf>, Option<u64>) {
         }
     }
 
-    (scale, path, steps)
+    if steps.is_some() && seconds.is_some() {
+        eprintln!("--steps and --seconds are mutually exclusive");
+        usage();
+        process::exit(1);
+    }
+
+    (scale, path, steps, seconds.map(Duration::from_secs_f64))
 }
 
 fn usage() {
@@ -156,18 +190,26 @@ fn usage() {
     );
     println!("                [--rom <rom.gb>]");
     println!("                [--steps <number of CPU cycles to run, 0 or omitted = run forever>]");
+    println!("                [--seconds <positive number of seconds to run before exiting>]");
 }
 
-fn run_headless(rom_data: Box<[u8]>, steps: Option<u64>) {
+fn run_headless(
+    rom_data: Box<[u8]>,
+    steps: Option<u64>,
+    run_duration: Option<Duration>,
+) {
     let gameboy_thread = thread::spawn(move || {
         let mut gameboy = Gameboy::headless_dmg(&rom_data);
-        match steps {
-            Some(n) => {
+        match (steps, run_duration) {
+            (Some(n), _) => {
                 for _ in 0..n {
                     gameboy.step(1);
                 }
             }
-            None => gameboy.run(None),
+            (None, Some(duration)) => {
+                gameboy.run_for(None, duration);
+            }
+            (None, None) => gameboy.run(None),
         }
     });
 
