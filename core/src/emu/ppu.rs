@@ -65,6 +65,7 @@ impl Fetch {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Oa {
+    pri: u8,
     y: u8,
     x: u8,
     index: u8,
@@ -80,7 +81,7 @@ impl std::fmt::Display for Oa {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "y:{:02X} x:{:02X} index:{:02X} priority:{} xflip:{} yflip:{} dmg_palette:{} bank:{} cgb_palatte:{}",
+            "y:#{} x:#{} index:#{} priority:{} xflip:{} yflip:{} dmg_palette:{} bank:{} cgb_palatte:{}",
             self.y,
             self.x,
             self.index,
@@ -234,21 +235,40 @@ impl Ppu {
 
     pub fn read_oam(&mut self) {
         let mut addr = 0xFE00;
+        let mut pri = 40;
         while addr < 0xFEA0 {
-            let oa = self.mem_read_oa(addr);
+            let oa = self.mem_read_oa(addr, pri);
             addr += 4;
-            if oa.y == self.ly() {
+            pri -= 1;
+
+            let lcdc = self.mem_read(LCDC);
+            let obj_size = if isbitset!(lcdc, 2) { 16 } else { 8 };
+            if (oa.y..(oa.y + obj_size)).contains(&self.ly()) {
                 if oa.x != 0 || oa.y != 0 {
-                    eprintln!("OBJECT {}", oa);
+                    eprintln!(
+                        "OBJECT HIT ly:{} obj:{} obj_size:{} pri:{}",
+                        self.ly(),
+                        oa,
+                        obj_size,
+                        oa.pri,
+                    );
                 }
                 self.objects.push(oa);
+
+                // 10 Object Limit
+                if self.objects.len() == 10 {
+                    return;
+                }
             }
         }
     }
 
     pub fn oamscan(&mut self) {
         if self.dot == 80 {
+            self.objects.clear();
             self.read_oam();
+            // Sort OAM by x position then priority
+            self.objects.sort_by_key(|obj| (obj.x, obj.pri));
         }
         self.dot -= 1;
         if self.dot == 0 {
@@ -333,11 +353,59 @@ impl Ppu {
         }
     }
 
+    pub fn fetch_obj_pixel(&mut self) -> Option<Pixel> {
+        for obj in &self.objects {
+            if (obj.x..obj.x + 8).contains(&self.x) {
+                // Obj Hit
+                let x_idx = self.x - obj.x;
+                let y_idx = self.ly() - obj.y;
+
+                let addr = self.tile_address_lo(true, obj.index, y_idx);
+                let datalo = self.mem_read(addr);
+                let addr = self.tile_address_lo(true, obj.index, y_idx) + 1;
+                let datahi = self.mem_read(addr);
+
+                let lo = (datalo >> x_idx) & 0x1;
+                let hi = (datahi >> x_idx) & 0x1;
+                let color = self.palette_decode(lo + (hi << 1));
+
+                eprintln!(
+                    "obj.x#{} self.x#{} obj.y#{} self.ly#{} index{} color{}",
+                    obj.x,
+                    self.x,
+                    obj.y,
+                    self.ly(),
+                    obj.index,
+                    color,
+                );
+                // If non-transparent
+                if color != 0x00 {
+                    let pixel = Pixel {
+                        color,
+                        palette: 0,
+                        bg_priority: 0,
+                    };
+
+                    return Some(pixel);
+                } else {
+                    eprintln!("TRANSPARENT!");
+                }
+            }
+        }
+        None
+    }
+
     pub fn render(&mut self) {
         let pixel = if self.bg_fifo.is_empty() {
             return;
         } else {
             self.bg_fifo.remove(0)
+        };
+
+        // TODO: add OBJ penalties to mode 3
+        let pixel = match self.fetch_obj_pixel() {
+            Some(p) => p,
+            None => pixel,
         };
 
         let index = self.x as usize + self.ly() as usize * SCREEN_WIDTH as usize;
@@ -411,12 +479,13 @@ impl Ppu {
         f(&mem)
     }
 
-    pub fn mem_read_oa(&self, addr: u16) -> Oa {
-        let x = self.with_mem(|mem| mem.dbg_read(addr));
+    pub fn mem_read_oa(&self, addr: u16, pri: u8) -> Oa {
         let y = self.with_mem(|mem| mem.dbg_read(addr));
-        let index = self.with_mem(|mem| mem.dbg_read(addr));
-        let attr = self.with_mem(|mem| mem.dbg_read(addr));
+        let x = self.with_mem(|mem| mem.dbg_read(addr + 1));
+        let index = self.with_mem(|mem| mem.dbg_read(addr + 2));
+        let attr = self.with_mem(|mem| mem.dbg_read(addr + 3));
         Oa {
+            pri,
             x,
             y,
             index,
@@ -576,7 +645,7 @@ impl Ppu {
         }
     }
 
-    pub fn palette_decode(&mut self, id: u8) -> u8 {
+    pub fn palette_decode(&self, id: u8) -> u8 {
         let bgp = self.mem_read(BGP);
         match id {
             0x0 => bgp & 0x3,

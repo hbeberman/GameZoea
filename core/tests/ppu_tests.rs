@@ -413,4 +413,91 @@ VBlankHandler:
 }
 // }}}
 
+#[test]
+fn sprite_basic() {
+    const ROM: &[u8] = gbasm! {r#"
+    di
+    xor a
+    ld [rIF], a
+    ld [rIE], a
+
+.waitVB0:
+    ld a, [rLY]
+    cp 144
+    jr c, .waitVB0
+
+    ld a, [rLCDC]
+    and %01111111
+    ld [rLCDC], a
+
+.waitLCDOff:
+    ld a, [rLCDC]
+    and %10000000
+    jr nz, .waitLCDOff
+
+    ld hl, $8010
+    ld de, SmileyTile
+    ld b, 8
+.copyTile:
+    ld a, [de]
+    ld [hl+], a
+    inc de
+    dec b
+    jr nz, .copyTile
+
+    ld hl, OAM_BASE
+    ld a, 88
+    ld [hl+], a
+    ld a, 88
+    ld [hl+], a
+    ld a, 1
+    ld [hl+], a
+    xor a
+    ld [hl+], a
+
+    ld a, %11100100
+    ld [rBGP], a
+    ld [rOBP0], a
+
+    ld a, %10000010
+    ld [rLCDC], a
+
+    ei
+
+.hang:
+    halt
+    jr .hang
+
+
+; ----------------------------------------------------------
+;  Register definitions (now AFTER EntryPoint)
+; ----------------------------------------------------------
+DEF rLCDC = $FF40
+DEF rLY   = $FF44
+DEF rBGP  = $FF47
+DEF rOBP0 = $FF48
+DEF rIF   = $FF0F
+DEF rIE   = $FFFF
+DEF OAM_BASE = $FE00
+
+
+; ----------------------------------------------------------
+;  Tile data (also AFTER EntryPoint)
+; ----------------------------------------------------------
+SECTION "Tiles", ROM0
+SmileyTile:
+    db %00111100
+    db %01000010
+    db %10100101
+    db %10000001
+    db %10100101
+    db %10011001
+    db %01000010
+    db %00111100
+    "#};
+    let mut gb = Gameboy::headless_dmg(ROM);
+    gb.tick(2000000);
+    assert_hex_eq!(gb.cpu.a(), 0x00);
+}
+
 // }}}
