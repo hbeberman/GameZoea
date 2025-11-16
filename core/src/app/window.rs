@@ -1,5 +1,5 @@
-pub use crate::emu::cpu::*;
 use crate::app::control::{ControlMessage, ControlSender};
+pub use crate::emu::cpu::*;
 use crate::emu::joypad::JoypadButton;
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture, wgpu::PresentMode};
 use std::{
@@ -163,19 +163,16 @@ impl ApplicationHandler<WindowMessage> for WindowApp {
             WindowEvent::CloseRequested => {
                 self.request_exit(event_loop);
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 if key_event.state == ElementState::Pressed {
                     match key_event.physical_key {
-                        PhysicalKey::Code(KeyCode::Escape)
-                        | PhysicalKey::Code(KeyCode::KeyP) => {
+                        PhysicalKey::Code(KeyCode::Escape) | PhysicalKey::Code(KeyCode::KeyP) => {
                             self.request_exit(event_loop);
                         }
                         PhysicalKey::Code(KeyCode::KeyZ) => {
-                            if self
-                                .control_tx
-                                .send(ControlMessage::DumpState)
-                                .is_err()
-                            {
+                            if self.control_tx.send(ControlMessage::DumpState).is_err() {
                                 eprintln!("failed to request dump");
                             }
                         }

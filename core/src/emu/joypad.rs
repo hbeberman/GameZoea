@@ -2,10 +2,10 @@ use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use crate::emu::regs::*;
 use crate::{bit, setbit};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum JoypadButton {

@@ -82,7 +82,9 @@ impl Serial {
     }
 
     pub fn save_state(&self) -> SerialState {
-        SerialState { buf: self.buf.clone() }
+        SerialState {
+            buf: self.buf.clone(),
+        }
     }
 
     pub fn load_state(&mut self, state: &SerialState) {

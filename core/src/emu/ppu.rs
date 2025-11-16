@@ -536,11 +536,7 @@ impl Ppu {
     fn tile_map_base(&self, window: bool) -> u16 {
         let lcdc = self.mem_read(LCDC);
         if window {
-            if isbitset!(lcdc, 6) {
-                0x9C00
-            } else {
-                0x9800
-            }
+            if isbitset!(lcdc, 6) { 0x9C00 } else { 0x9800 }
         } else if isbitset!(lcdc, 3) {
             0x9C00
         } else {

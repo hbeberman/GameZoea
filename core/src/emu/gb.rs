@@ -108,7 +108,7 @@ impl Gameboy {
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
-                //   self.log_status(L_CPU + L_TIMER + L_MEM);
+                //self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
@@ -148,6 +148,8 @@ impl Gameboy {
         let mut i = count;
         let pass = [3, 5, 8, 13, 21, 34];
         let fail = [0x42; 6];
+        let start_time = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(30);
         while i > 0 {
             let cur = self.cpu.retired();
             self.tick(1);
@@ -158,7 +160,26 @@ impl Gameboy {
                 return;
             }
             if self.serial.buf == fail {
+                let b = self.cpu.b();
+                let d = self.cpu.d();
+                let e = self.cpu.e();
+                let oam0 = self.mem_dbg_read(0xFE00);
+                let round1_oam = self.mem_dbg_read(0xFF84);
+                let round1_b = self.mem_dbg_read(0xFF85);
+                eprintln!(
+                    "Mooneye fail: PC {:04X} B {:02X} D {:02X} E {:02X} OAM0 {:02X} R1B {:02X} R1OAM {:02X}",
+                    self.cpu.cur_pc(),
+                    b,
+                    d,
+                    e,
+                    oam0,
+                    round1_b,
+                    round1_oam
+                );
                 panic!("Mooneye test failure!")
+            }
+            if start_time.elapsed() > timeout {
+                panic!("Mooneye test timeout after 30 seconds!")
             }
         }
     }
@@ -184,8 +205,7 @@ impl Gameboy {
     ) {
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
         let throttle_batch = THROTTLE_BATCH_CYCLES as u64;
-        let throttle_batch_duration =
-            normal_cycle.mul_f64(THROTTLE_BATCH_CYCLES as f64);
+        let throttle_batch_duration = normal_cycle.mul_f64(THROTTLE_BATCH_CYCLES as f64);
         let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);
         let mut animate = Instant::now() + Duration::from_secs_f64(0.5);
         let stop_time = limit.map(|d| Instant::now() + d);
@@ -211,8 +231,7 @@ impl Gameboy {
                 let now = Instant::now();
                 if now < next_cycle_deadline {
                     let remaining = next_cycle_deadline - now;
-                    let grace =
-                        Duration::from_micros(THROTTLE_SLEEP_GRACE_US);
+                    let grace = Duration::from_micros(THROTTLE_SLEEP_GRACE_US);
                     if remaining > grace {
                         thread::sleep(remaining - grace);
                     }
@@ -239,16 +258,14 @@ impl Gameboy {
                         Ok(ControlMessage::JoypadInput { button, pressed }) => {
                             self.joypad.enqueue_input(button, pressed);
                         }
-                        Ok(ControlMessage::DumpState) => {
-                            match self.dump_to_file() {
-                                Ok(path) => {
-                                    println!("State dumped to {}", path.display());
-                                }
-                                Err(err) => {
-                                    eprintln!("Failed to dump state: {err}");
-                                }
+                        Ok(ControlMessage::DumpState) => match self.dump_to_file() {
+                            Ok(path) => {
+                                println!("State dumped to {}", path.display());
                             }
-                        }
+                            Err(err) => {
+                                eprintln!("Failed to dump state: {err}");
+                            }
+                        },
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => return,
                     }
@@ -355,7 +372,7 @@ impl Gameboy {
         self.with_mem(|mem| mem.dbg_read(addr))
     }
 
-fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
+    fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
         let mut mem = self.mem.borrow_mut();
         f(&mut mem)
     }
@@ -394,8 +411,8 @@ fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
 
     pub fn dump_to_file(&mut self) -> io::Result<PathBuf> {
         let state = self.save_state();
-        let data = bincode::serialize(&state)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let data =
+            bincode::serialize(&state).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let guid = Uuid::new_v4();
         let filename = format!("{guid}.core");
         let path = env::current_dir()?.join(filename);
@@ -418,8 +435,7 @@ pub struct GameboyState {
 impl GameboyState {
     pub fn from_path(path: &Path) -> io::Result<Self> {
         let data = fs::read(path)?;
-        bincode::deserialize(&data)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        bincode::deserialize(&data).map_err(|err| io::Error::new(io::ErrorKind::Other, err))
     }
 
     pub fn cartridge_bytes(&self) -> &[u8] {

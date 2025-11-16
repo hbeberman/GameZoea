@@ -31,8 +31,9 @@ pub struct Memory {
     owner: Comp,
     dma: usize,
     dma_start_delay: u8,
-    dma_delay_block: bool,
-    dma_source: Option<usize>,
+    dma_pending_source: Option<usize>,
+    dma_current_source: u16,
+    dma_last_value: u8,
     oam_busy: bool,
     vram_busy: bool,
     mbc: Mbc,
@@ -78,8 +79,9 @@ impl Memory {
             owner: Comp::Cpu,
             dma: 0,
             dma_start_delay: 0,
-            dma_delay_block: false,
-            dma_source: None,
+            dma_pending_source: None,
+            dma_current_source: 0,
+            dma_last_value: 0,
             oam_busy: false,
             vram_busy: false,
             mbc: Mbc::None,
@@ -135,8 +137,9 @@ impl Memory {
             owner: Comp::Cpu,
             dma: 0,
             dma_start_delay: 0,
-            dma_delay_block: false,
-            dma_source: None,
+            dma_pending_source: None,
+            dma_current_source: 0,
+            dma_last_value: 0,
             oam_busy: false,
             vram_busy: false,
             mbc,
@@ -221,8 +224,14 @@ impl Memory {
 
     pub fn read(&mut self) {
         let addr = self.addr;
+        let hram_access = (0xFF80..=0xFFFE).contains(&addr);
+        let dma_register = addr == DMA;
         if self.owner == Comp::Cpu {
-            if self.dma_blocks_cpu(addr) {
+            if dma_register {
+                self.data = self.dma_last_value;
+                return;
+            }
+            if !hram_access && self.dma_blocks_cpu(addr) {
                 self.data = 0xFF;
                 return;
             }
@@ -256,6 +265,9 @@ impl Memory {
     pub fn write(&mut self) {
         let addr = self.addr();
         let data = self.data();
+        let hram_access = (0xFF80..=0xFFFE).contains(&addr);
+
+        let dma_register = addr == DMA;
 
         if self.owner == Comp::Cpu {
             if self.tima_overflow && addr == TIMA {
@@ -263,13 +275,15 @@ impl Memory {
             }
             if addr == DMA {
                 let start = (data as usize) << 8;
-                let was_blocking = self.dma_bus_blocked();
+                self.dma_last_value = data;
+                // Always schedule the new DMA with a start delay
+                // If a DMA is pending, it will be replaced
                 self.dma_start_delay = DMA_START_DELAY_CYCLES;
-                self.dma_delay_block = was_blocking;
-                self.dma_source = Some(start);
-                self.dma = DMA_TRANSFER_CYCLES;
+                self.dma_pending_source = Some(start);
+                self.mem[addr as usize] = data;
+                return;
             }
-            if self.dma_blocks_cpu(addr) {
+            if !dma_register && !hram_access && self.dma_blocks_cpu(addr) {
                 return;
             }
             if self.oam_busy && (0xFE00..0xFEA0).contains(&addr) {
@@ -435,16 +449,26 @@ impl Memory {
         if self.dma_start_delay > 0 {
             self.dma_start_delay -= 1;
             if self.dma_start_delay == 0 {
-                if let Some(start) = self.dma_source.take() {
-                    self.copy_oam_from(start);
+                // Start the pending DMA, replacing any active one
+                if let Some(start) = self.dma_pending_source.take() {
+                    self.start_dma_now(start);
                 }
-                self.dma_delay_block = false;
             }
-            return;
         }
 
         if self.dma != 0 {
+            // Copy one byte every 4 cycles
+            let bytes_remaining = (self.dma + 3) / 4;
+            let byte_index = OAM_LEN - bytes_remaining;
+            if self.dma % 4 == 0 && byte_index < OAM_LEN {
+                let src_addr = self.dma_current_source.wrapping_add(byte_index as u16);
+                let value = self.read_mapped(src_addr);
+                self.mem[OAM_START + byte_index] = value;
+            }
             self.dma -= 1;
+            if self.dma == 0 {
+                eprintln!("DMA FINISHED!");
+            };
         }
     }
 
@@ -456,29 +480,27 @@ impl Memory {
         self.vram_busy = vram_busy;
     }
 
+    fn start_dma_now(&mut self, start: usize) {
+        self.dma_current_source = (start & 0xFFFF) as u16;
+        self.dma = DMA_TRANSFER_CYCLES;
+        self.dma_start_delay = 0;
+    }
+
     fn dma_blocks_cpu(&self, addr: u16) -> bool {
-        addr < 0xFF00 && self.dma_bus_blocked()
+        if self.dma == 0 {
+            return false;
+        }
+        let wram_region = (0xC000..=0xFDFF).contains(&addr);
+        let hram_region = (0xFF80..=0xFFFE).contains(&addr);
+        !(wram_region || hram_region)
     }
 
     fn dma_blocks_oam(&self, addr: u16) -> bool {
-        (0xFE00..0xFEA0).contains(&addr) && self.dma_bus_blocked()
+        (0xFE00..0xFEA0).contains(&addr) && self.dma != 0
     }
 
     fn dma_bus_blocked(&self) -> bool {
-        if self.dma_start_delay > 0 {
-            self.dma_delay_block
-        } else {
-            self.dma != 0
-        }
-    }
-
-    fn copy_oam_from(&mut self, start: usize) {
-        let base = (start & 0xFFFF) as u16;
-        for offset in 0..OAM_LEN {
-            let addr = base.wrapping_add(offset as u16);
-            let value = self.read_mapped(addr);
-            self.mem[OAM_START + offset] = value;
-        }
+        self.dma != 0
     }
 
     pub fn mbc_rom_write(&mut self) {
@@ -527,6 +549,7 @@ impl Memory {
                     bank = 1;
                 }
                 self.mbc3_rom_bank = bank;
+                eprintln!("MBC3 Rom Bank set to #{}", bank);
             }
             0x4000..=0x5FFF => {
                 if self.data <= 0x03 {
@@ -708,7 +731,11 @@ impl Memory {
 
     fn total_rom_banks(&self) -> usize {
         let banks = self.cartridge.len() / 0x4000;
-        if banks == 0 { 1 } else { banks }
+        if banks == 0 {
+            1
+        } else {
+            banks
+        }
     }
 
     fn total_ram_banks(&self) -> usize {

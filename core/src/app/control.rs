@@ -4,10 +4,7 @@ use std::sync::mpsc::{Receiver, Sender};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlMessage {
     Exit,
-    JoypadInput {
-        button: JoypadButton,
-        pressed: bool,
-    },
+    JoypadInput { button: JoypadButton, pressed: bool },
     DumpState,
 }
 

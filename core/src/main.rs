@@ -8,16 +8,14 @@ const DEFAULT_SCALE: u32 = 1;
 fn main() {
     let (scale, rom, steps, run_duration, uncapped, load_path) = parse_args();
 
-    let loaded_state = load_path.map(|path| {
-        match GameboyState::from_path(&path) {
-            Ok(state) => {
-                eprintln!("Loaded state from {:?}", path.display());
-                state
-            }
-            Err(err) => {
-                eprintln!("Failed to load state {:?}: {err}", path.display());
-                process::exit(1);
-            }
+    let loaded_state = load_path.map(|path| match GameboyState::from_path(&path) {
+        Ok(state) => {
+            eprintln!("Loaded state from {:?}", path.display());
+            state
+        }
+        Err(err) => {
+            eprintln!("Failed to load state {:?}: {err}", path.display());
+            process::exit(1);
         }
     });
 

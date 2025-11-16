@@ -28,7 +28,6 @@ mod tests {
     }
 
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_add_sp_e_timing_gb,
         "tests/roms/mooneye/acceptance/add_sp_e_timing.gb"
     );
@@ -105,7 +104,6 @@ mod tests {
         "tests/roms/mooneye/acceptance/boot_regs-sgb2.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_call_cc_timing_gb,
         "tests/roms/mooneye/acceptance/call_cc_timing.gb"
     );
@@ -114,7 +112,6 @@ mod tests {
         "tests/roms/mooneye/acceptance/call_cc_timing2.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_call_timing_gb,
         "tests/roms/mooneye/acceptance/call_timing.gb"
     );
@@ -175,17 +172,14 @@ mod tests {
         "tests/roms/mooneye/acceptance/intr_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_jp_cc_timing_gb,
         "tests/roms/mooneye/acceptance/jp_cc_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_jp_timing_gb,
         "tests/roms/mooneye/acceptance/jp_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_ld_hl_sp_e_timing_gb,
         "tests/roms/mooneye/acceptance/ld_hl_sp_e_timing.gb"
     );
