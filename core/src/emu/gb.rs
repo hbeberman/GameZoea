@@ -2,18 +2,24 @@ use crate::app::{
     control::{ControlMessage, ControlReceiver},
     window::*,
 };
-use crate::emu::cpu::Cpu;
-use crate::emu::joypad::Joypad;
+use crate::emu::cpu::{Cpu, CpuState};
+use crate::emu::joypad::{Joypad, JoypadSnapshot};
 use crate::emu::mem::Memory;
 use crate::emu::ppu::*;
 use crate::emu::regs::*;
-use crate::emu::serial::Serial;
-use crate::emu::timer::*;
+use crate::emu::serial::{Serial, SerialState};
+use crate::emu::timer::{Timer, TimerState};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
+use std::env;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 const NORMAL_CLOCK: f64 = 1.0 / 4_194_304.0;
 const THROTTLE_BATCH_CYCLES: u32 = 8192;
@@ -25,7 +31,7 @@ const L_TIMER: u8 = 1 << 2;
 const L_R: u8 = 1 << 3;
 const L_MEM: u8 = 1 << 4;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Comp {
     None,
     Cpu,
@@ -233,6 +239,16 @@ impl Gameboy {
                         Ok(ControlMessage::JoypadInput { button, pressed }) => {
                             self.joypad.enqueue_input(button, pressed);
                         }
+                        Ok(ControlMessage::DumpState) => {
+                            match self.dump_to_file() {
+                                Ok(path) => {
+                                    println!("State dumped to {}", path.display());
+                                }
+                                Err(err) => {
+                                    eprintln!("Failed to dump state: {err}");
+                                }
+                            }
+                        }
                         Err(TryRecvError::Empty) => break,
                         Err(TryRecvError::Disconnected) => return,
                     }
@@ -339,8 +355,74 @@ impl Gameboy {
         self.with_mem(|mem| mem.dbg_read(addr))
     }
 
-    fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
+fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
         let mut mem = self.mem.borrow_mut();
         f(&mut mem)
+    }
+
+    pub fn save_state(&mut self) -> GameboyState {
+        let memory = self.with_mem_mut(|mem| mem.snapshot());
+        GameboyState {
+            t: self.t,
+            memory,
+            cpu: self.cpu.save_state(),
+            ppu: self.ppu.save_state(),
+            timer: self.timer.save_state(),
+            serial: self.serial.save_state(),
+            joypad: self.joypad.save_state(),
+        }
+    }
+
+    pub fn load_state(&mut self, state: GameboyState) {
+        let GameboyState {
+            t,
+            memory,
+            cpu,
+            ppu,
+            timer,
+            serial,
+            joypad,
+        } = state;
+        self.t = t;
+        *self.mem.borrow_mut() = memory;
+        self.timer.load_state(&timer);
+        self.serial.load_state(&serial);
+        self.joypad.load_state(&joypad);
+        self.ppu.load_state(&ppu);
+        self.cpu.load_state(&cpu);
+    }
+
+    pub fn dump_to_file(&mut self) -> io::Result<PathBuf> {
+        let state = self.save_state();
+        let data = bincode::serialize(&state)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let guid = Uuid::new_v4();
+        let filename = format!("{guid}.core");
+        let path = env::current_dir()?.join(filename);
+        fs::write(&path, data)?;
+        Ok(path)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct GameboyState {
+    t: u64,
+    memory: Memory,
+    cpu: CpuState,
+    ppu: PpuState,
+    timer: TimerState,
+    serial: SerialState,
+    joypad: JoypadSnapshot,
+}
+
+impl GameboyState {
+    pub fn from_path(path: &Path) -> io::Result<Self> {
+        let data = fs::read(path)?;
+        bincode::deserialize(&data)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+    }
+
+    pub fn cartridge_bytes(&self) -> &[u8] {
+        self.memory.cartridge_data()
     }
 }

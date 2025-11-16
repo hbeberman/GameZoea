@@ -1,5 +1,7 @@
 use crate::emu::gb::Comp;
 use crate::emu::regs::*;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 use std::time::{Duration, Instant};
 
 const DMA_TRANSFER_CYCLES: usize = 160 * 4;
@@ -7,7 +9,7 @@ const DMA_START_DELAY_CYCLES: u8 = 8;
 const OAM_START: usize = 0xFE00;
 const OAM_LEN: usize = 0xA0;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 enum Mbc {
     None,
@@ -24,6 +26,7 @@ enum Mbc {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Memory {
     owner: Comp,
     dma: usize,
@@ -33,6 +36,7 @@ pub struct Memory {
     oam_busy: bool,
     vram_busy: bool,
     mbc: Mbc,
+    #[serde(with = "BigArray")]
     mem: [u8; 0x10000],
     cartridge: Vec<u8>,
     cart_ram: Vec<u8>,
@@ -57,6 +61,7 @@ pub struct Memory {
     rtc_day_counter: u16,
     rtc_day_carry: bool,
     rtc_halt: bool,
+    #[serde(skip, default = "Memory::now_instant")]
     rtc_last_update: Instant,
     rtc_latched: [u8; 5],
     rtc_latch_active: bool,
@@ -64,6 +69,10 @@ pub struct Memory {
 }
 
 impl Memory {
+    fn now_instant() -> Instant {
+        Instant::now()
+    }
+
     pub fn empty() -> Self {
         Memory {
             owner: Comp::Cpu,
@@ -165,6 +174,15 @@ impl Memory {
             mem.rom_bank_count, mem.ram_bank_count, mem.mbc
         );
         mem
+    }
+
+    pub fn snapshot(&mut self) -> Self {
+        self.update_rtc();
+        self.clone()
+    }
+
+    pub fn cartridge_data(&self) -> &[u8] {
+        &self.cartridge
     }
 
     fn mbc_decode(cartridge: &[u8]) -> (Mbc, u8) {

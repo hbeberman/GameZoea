@@ -1,6 +1,7 @@
 use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use crate::{clearbit, isbitset};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -10,6 +11,11 @@ pub const SC: u16 = 0xFF02;
 pub struct Serial {
     mem: Rc<RefCell<Memory>>,
     pub buf: Vec<u8>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SerialState {
+    buf: Vec<u8>,
 }
 
 impl Serial {
@@ -73,5 +79,13 @@ impl Serial {
     pub fn own(&mut self, own: bool) {
         let owner = if own { Comp::Serial } else { Comp::None };
         self.with_mem_mut(|mem| mem.set_owner(owner))
+    }
+
+    pub fn save_state(&self) -> SerialState {
+        SerialState { buf: self.buf.clone() }
+    }
+
+    pub fn load_state(&mut self, state: &SerialState) {
+        self.buf = state.buf.clone();
     }
 }

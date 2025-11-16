@@ -6,47 +6,70 @@ use std::{env, fs, process, sync::mpsc, thread, time::Duration};
 const DEFAULT_SCALE: u32 = 1;
 
 fn main() {
-    let (scale, rom, steps, run_duration, uncapped) = parse_args();
+    let (scale, rom, steps, run_duration, uncapped, load_path) = parse_args();
 
-    let rom_path = match rom {
+    let loaded_state = load_path.map(|path| {
+        match GameboyState::from_path(&path) {
+            Ok(state) => {
+                eprintln!("Loaded state from {:?}", path.display());
+                state
+            }
+            Err(err) => {
+                eprintln!("Failed to load state {:?}: {err}", path.display());
+                process::exit(1);
+            }
+        }
+    });
+
+    let rom_data = match rom {
         Some(rom) => {
             eprintln!("Opening rom {:?}", rom.display());
-            rom
+            let rom_path = if rom.is_absolute() {
+                rom
+            } else {
+                match std::env::current_dir() {
+                    Ok(cwd) => cwd.join(rom),
+                    Err(_) => rom,
+                }
+            };
+
+            if !rom_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("gb"))
+                .unwrap_or(false)
+            {
+                eprintln!(
+                    "Error: ROM file must have a .gb extension, got: {:?}",
+                    rom_path.display()
+                );
+                return;
+            }
+
+            let rom_bytes = match fs::read(&rom_path) {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    eprintln!("Failed to read rom {:?}: {err}", rom_path.display());
+                    return;
+                }
+            };
+
+            if rom_bytes.is_empty() {
+                eprintln!("Rom {:?} is empty", rom_path.display());
+                return;
+            }
+
+            rom_bytes.into_boxed_slice()
         }
         None => {
-            eprintln!("No rom specified! Use --rom <file>.gb");
-            return;
+            if let Some(state) = loaded_state.as_ref() {
+                state.cartridge_bytes().to_vec().into_boxed_slice()
+            } else {
+                eprintln!("No rom specified! Use --rom <file>.gb or --load <state.core>");
+                return;
+            }
         }
     };
-
-    // Validate that the ROM has a .gb extension
-    if !rom_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("gb"))
-        .unwrap_or(false)
-    {
-        eprintln!(
-            "Error: ROM file must have a .gb extension, got: {:?}",
-            rom_path.display()
-        );
-        return;
-    }
-
-    let rom_bytes = match fs::read(&rom_path) {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            eprintln!("Failed to read rom {:?}: {err}", rom_path.display());
-            return;
-        }
-    };
-
-    if rom_bytes.is_empty() {
-        eprintln!("Rom {:?} is empty", rom_path.display());
-        return;
-    }
-
-    let rom_data = rom_bytes.into_boxed_slice();
 
     if run_duration.is_some() && scale != 0 {
         eprintln!("--seconds is only supported when running headless (--scale 0)");
@@ -54,11 +77,11 @@ fn main() {
     }
 
     if scale == 0 {
-        run_headless(rom_data, steps, run_duration);
+        run_headless(rom_data, steps, run_duration, loaded_state);
         return;
     }
 
-    run_windowed(rom_data, scale, uncapped);
+    run_windowed(rom_data, scale, uncapped, loaded_state);
 }
 
 fn parse_args() -> (
@@ -67,6 +90,7 @@ fn parse_args() -> (
     Option<u64>,
     Option<Duration>,
     bool,
+    Option<std::path::PathBuf>,
 ) {
     let mut args = env::args();
     let _ = args.next();
@@ -76,6 +100,7 @@ fn parse_args() -> (
     let mut steps = None;
     let mut seconds = None;
     let mut uncapped = false;
+    let mut load_path = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -171,6 +196,29 @@ fn parse_args() -> (
             "--uncapped" => {
                 uncapped = true;
             }
+            "--load" => {
+                let value = args.next().unwrap_or_else(|| {
+                    eprintln!("Missing value for {arg}");
+                    usage();
+                    process::exit(1);
+                });
+
+                if value.starts_with("--") {
+                    eprintln!("Missing value for {arg}");
+                    usage();
+                    process::exit(1);
+                }
+
+                let tpath = std::path::Path::new(&value);
+                load_path = Some(if tpath.is_absolute() {
+                    tpath.to_path_buf()
+                } else {
+                    match std::env::current_dir() {
+                        Ok(cwd) => cwd.join(tpath),
+                        Err(_) => tpath.to_path_buf(),
+                    }
+                });
+            }
             _ => {
                 eprintln!("Unknown argument: {arg}");
                 usage();
@@ -191,6 +239,7 @@ fn parse_args() -> (
         steps,
         seconds.map(Duration::from_secs_f64),
         uncapped,
+        load_path,
     )
 }
 
@@ -203,15 +252,20 @@ fn usage() {
     println!("                [--steps <number of CPU cycles to run, 0 or omitted = run forever>]");
     println!("                [--seconds <positive number of seconds to run before exiting>]");
     println!("                [--uncapped (run headed mode without throttling)]");
+    println!("                [--load <state.core> (resume from a dumped state)]");
 }
 
 fn run_headless(
     rom_data: Box<[u8]>,
     steps: Option<u64>,
     run_duration: Option<Duration>,
+    load_state: Option<GameboyState>,
 ) {
     let gameboy_thread = thread::spawn(move || {
         let mut gameboy = Gameboy::headless_dmg(&rom_data);
+        if let Some(state) = load_state {
+            gameboy.load_state(state);
+        }
         match (steps, run_duration) {
             (Some(n), _) => {
                 for _ in 0..n {
@@ -228,7 +282,7 @@ fn run_headless(
     gameboy_thread.join().unwrap();
 }
 
-fn run_windowed(rom_data: Box<[u8]>, scale: u32, uncapped: bool) {
+fn run_windowed(rom_data: Box<[u8]>, scale: u32, uncapped: bool, load_state: Option<GameboyState>) {
     let mut threads = vec![];
     let (frame_tx, frame_rx) = window::create_frame_channel();
     let (control_tx, control_rx) = mpsc::channel::<control::ControlMessage>();
@@ -242,6 +296,9 @@ fn run_windowed(rom_data: Box<[u8]>, scale: u32, uncapped: bool) {
 
     let gameboy_thread = thread::spawn(move || {
         let mut gameboy = Gameboy::dmg(&rom_data, frame_tx);
+        if let Some(state) = load_state {
+            gameboy.load_state(state);
+        }
         gameboy.run(Some(control_rx), !uncapped);
     });
     threads.push(gameboy_thread);

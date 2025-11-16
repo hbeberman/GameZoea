@@ -1,6 +1,7 @@
 use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use macros::*;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
@@ -157,7 +158,7 @@ impl OverflowingSub8 for u8 {
 // }}}
 
 // {{{ Cycle Enums
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mc {
     M7,
     M6,
@@ -187,7 +188,7 @@ impl Mc {
 }
 // }}}
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Registers {
     ir: u8,
     ie: u8,
@@ -209,6 +210,22 @@ pub struct Cpu {
     cb: u8,
     mc: Mc,
     executing: fn(&mut Cpu),
+    halted: bool,
+    haltbug: bool,
+    retired: u64,
+    cur_pc: u16,
+    prev_pc: u16,
+    dbg_break: u8,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CpuState {
+    r: Registers,
+    log_regs_prev: Registers,
+    log_regs_cur: Registers,
+    ime: u8,
+    cb: u8,
+    mc: Mc,
     halted: bool,
     haltbug: bool,
     retired: u64,
@@ -2909,6 +2926,48 @@ impl Cpu {
     pub fn own(&mut self, own: bool) {
         let owner = if own { Comp::Cpu } else { Comp::None };
         self.with_mem_mut(|mem| mem.set_owner(owner))
+    }
+
+    pub fn save_state(&self) -> CpuState {
+        CpuState {
+            r: self.r,
+            log_regs_prev: self.log_regs_prev,
+            log_regs_cur: self.log_regs_cur,
+            ime: self.ime,
+            cb: self.cb,
+            mc: self.mc,
+            halted: self.halted,
+            haltbug: self.haltbug,
+            retired: self.retired,
+            cur_pc: self.cur_pc,
+            prev_pc: self.prev_pc,
+            dbg_break: self.dbg_break,
+        }
+    }
+
+    pub fn load_state(&mut self, state: &CpuState) {
+        self.r = state.r;
+        self.log_regs_prev = state.log_regs_prev;
+        self.log_regs_cur = state.log_regs_cur;
+        self.ime = state.ime;
+        self.cb = state.cb;
+        self.mc = state.mc;
+        self.halted = state.halted;
+        self.haltbug = state.haltbug;
+        self.retired = state.retired;
+        self.cur_pc = state.cur_pc;
+        self.prev_pc = state.prev_pc;
+        self.dbg_break = state.dbg_break;
+        self.recompute_executing();
+    }
+
+    fn recompute_executing(&mut self) {
+        let prev_cb = self.cb;
+        let prev_retired = self.retired;
+        let handler = self.decode();
+        self.cb = prev_cb;
+        self.retired = prev_retired;
+        self.executing = handler;
     }
 
     // }}}

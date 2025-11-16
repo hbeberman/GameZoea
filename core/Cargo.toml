@@ -13,3 +13,7 @@ macros = { path = "../macros" }
 pixels = "0.15.0"
 winit = { version = "0.30.12", default-features = false, features = ["x11", "wayland", "rwh_06"] }
 winit_input_helper = "0.17.0"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+uuid = { version = "1.10", features = ["v4"] }
+serde-big-array = "0.5"

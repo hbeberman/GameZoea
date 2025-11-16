@@ -5,8 +5,9 @@ use crate::{bit, setbit};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum JoypadButton {
     Right,
     Left,
@@ -18,13 +19,13 @@ pub enum JoypadButton {
     Select,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 struct JoypadEvent {
     button: JoypadButton,
     pressed: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 struct JoypadState {
     right: bool,
     left: bool,
@@ -91,6 +92,12 @@ impl JoypadState {
 
 pub struct Joypad {
     mem: Rc<RefCell<Memory>>,
+    queue: VecDeque<JoypadEvent>,
+    state: JoypadState,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct JoypadSnapshot {
     queue: VecDeque<JoypadEvent>,
     state: JoypadState,
 }
@@ -175,6 +182,18 @@ impl Joypad {
     pub fn own(&mut self, own: bool) {
         let owner = if own { Comp::Joypad } else { Comp::None };
         self.with_mem_mut(|mem| mem.set_owner(owner))
+    }
+
+    pub fn save_state(&self) -> JoypadSnapshot {
+        JoypadSnapshot {
+            queue: self.queue.clone(),
+            state: self.state.clone(),
+        }
+    }
+
+    pub fn load_state(&mut self, snapshot: &JoypadSnapshot) {
+        self.queue = snapshot.queue.clone();
+        self.state = snapshot.state.clone();
     }
 }
 

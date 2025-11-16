@@ -1,11 +1,21 @@
 use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use crate::emu::regs::*;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct Timer {
     mem: Rc<RefCell<Memory>>,
+    system_counter: u16,
+    internal_tma: u8,
+    prev_signal: bool,
+    last_tac: u8,
+    overflow_delay: u8,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TimerState {
     system_counter: u16,
     internal_tma: u8,
     prev_signal: bool,
@@ -164,5 +174,23 @@ impl Timer {
     pub fn own(&mut self, own: bool) {
         let owner = if own { Comp::Timer } else { Comp::None };
         self.with_mem_mut(|mem| mem.set_owner(owner))
+    }
+
+    pub fn save_state(&self) -> TimerState {
+        TimerState {
+            system_counter: self.system_counter,
+            internal_tma: self.internal_tma,
+            prev_signal: self.prev_signal,
+            last_tac: self.last_tac,
+            overflow_delay: self.overflow_delay,
+        }
+    }
+
+    pub fn load_state(&mut self, state: &TimerState) {
+        self.system_counter = state.system_counter;
+        self.internal_tma = state.internal_tma;
+        self.prev_signal = state.prev_signal;
+        self.last_tac = state.last_tac;
+        self.overflow_delay = state.overflow_delay;
     }
 }

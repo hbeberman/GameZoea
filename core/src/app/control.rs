@@ -8,6 +8,7 @@ pub enum ControlMessage {
         button: JoypadButton,
         pressed: bool,
     },
+    DumpState,
 }
 
 pub type ControlSender = Sender<ControlMessage>;

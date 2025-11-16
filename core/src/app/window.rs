@@ -170,6 +170,15 @@ impl ApplicationHandler<WindowMessage> for WindowApp {
                         | PhysicalKey::Code(KeyCode::KeyP) => {
                             self.request_exit(event_loop);
                         }
+                        PhysicalKey::Code(KeyCode::KeyZ) => {
+                            if self
+                                .control_tx
+                                .send(ControlMessage::DumpState)
+                                .is_err()
+                            {
+                                eprintln!("failed to request dump");
+                            }
+                        }
                         _ => {}
                     }
                 }

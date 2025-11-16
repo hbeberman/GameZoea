@@ -3,6 +3,7 @@ use crate::emu::gb::Comp;
 use crate::emu::mem::Memory;
 use crate::emu::regs::*;
 use crate::{bit, isbitset, setbit};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
@@ -14,7 +15,7 @@ pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
 const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 enum Mode {
     M0,
     M1,
@@ -33,7 +34,7 @@ impl Mode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 enum Fetch {
     Tile_,
     Tile,
@@ -62,7 +63,7 @@ impl Fetch {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct Oa {
     pri: u8,
@@ -129,6 +130,7 @@ pub struct Ppu {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Pixel {
     color: u8, // 0..=3
     palette: u8,
@@ -172,7 +174,28 @@ impl Ppu {
 
         ppu
     }
+}
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PpuState {
+    objects: Vec<Oa>,
+    bg_fifo: Vec<Pixel>,
+    obj_fifo: Vec<Pixel>,
+    x: u8,
+    testing: usize,
+    back_buffer: Vec<u8>,
+    mode: Mode,
+    dot: u16,
+    dotlimit: u16,
+    fetch_state: Fetch,
+    fetch_tile: u8,
+    fetch_tile_datalo: u8,
+    fetch_tile_datahi: u8,
+    lcd_was_enabled: bool,
+    already_interrupted: bool,
+}
+
+impl Ppu {
     pub fn init_dmg(frame_tx: FrameSender, mem: Rc<RefCell<Memory>>) -> Self {
         let mut ppu = Ppu {
             frame_tx: Some(frame_tx),
@@ -410,7 +433,10 @@ impl Ppu {
             let bit_index = if obj.xflip { x_idx } else { 7 - x_idx };
             let lo = (datalo >> bit_index) & 0x1;
             let hi = (datahi >> bit_index) & 0x1;
-            let color = self.palette_decode(Some(obj), lo + (hi << 1))?;
+            let color = match self.palette_decode(Some(obj), lo + (hi << 1)) {
+                Some(color) => color,
+                None => continue,
+            };
 
             /*
             eprintln!(
@@ -711,5 +737,42 @@ impl Ppu {
         };
 
         Some(color)
+    }
+    pub fn save_state(&self) -> PpuState {
+        PpuState {
+            objects: self.objects.clone(),
+            bg_fifo: self.bg_fifo.clone(),
+            obj_fifo: self.obj_fifo.clone(),
+            x: self.x,
+            testing: self.testing,
+            back_buffer: self.back_buffer.clone(),
+            mode: self.mode,
+            dot: self.dot,
+            dotlimit: self.dotlimit,
+            fetch_state: self.fetch_state,
+            fetch_tile: self.fetch_tile,
+            fetch_tile_datalo: self.fetch_tile_datalo,
+            fetch_tile_datahi: self.fetch_tile_datahi,
+            lcd_was_enabled: self.lcd_was_enabled,
+            already_interrupted: self.already_interrupted,
+        }
+    }
+
+    pub fn load_state(&mut self, state: &PpuState) {
+        self.objects = state.objects.clone();
+        self.bg_fifo = state.bg_fifo.clone();
+        self.obj_fifo = state.obj_fifo.clone();
+        self.x = state.x;
+        self.testing = state.testing;
+        self.back_buffer = state.back_buffer.clone();
+        self.mode = state.mode;
+        self.dot = state.dot;
+        self.dotlimit = state.dotlimit;
+        self.fetch_state = state.fetch_state;
+        self.fetch_tile = state.fetch_tile;
+        self.fetch_tile_datalo = state.fetch_tile_datalo;
+        self.fetch_tile_datahi = state.fetch_tile_datahi;
+        self.lcd_was_enabled = state.lcd_was_enabled;
+        self.already_interrupted = state.already_interrupted;
     }
 }
