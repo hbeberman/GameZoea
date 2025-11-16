@@ -16,6 +16,8 @@ pub const LY: u16 = 0xFF44;
 pub const LYC: u16 = 0xFF45;
 pub const DMA: u16 = 0xFF46;
 pub const BGP: u16 = 0xFF47;
+pub const OBP0: u16 = 0xFF48;
+pub const OBP1: u16 = 0xFF49;
 pub const WY: u16 = 0xFF4A;
 pub const WX: u16 = 0xFF4B; // TODO: pandocs say WX0 and WX116 are weird
 

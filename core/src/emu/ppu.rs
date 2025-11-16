@@ -165,6 +165,8 @@ impl Ppu {
         ppu.mem_write(LY, 0x00);
         ppu.mem_write(LYC, 0x00);
         ppu.mem_write(BGP, 0xFC);
+        ppu.mem_write(OBP0, 0xFF);
+        ppu.mem_write(OBP1, 0xFF);
         ppu.mem_write(WY, 0x00);
         ppu.mem_write(WX, 0x00);
 
@@ -408,7 +410,7 @@ impl Ppu {
             let bit_index = if obj.xflip { x_idx } else { 7 - x_idx };
             let lo = (datalo >> bit_index) & 0x1;
             let hi = (datahi >> bit_index) & 0x1;
-            let color = self.palette_decode(lo + (hi << 1));
+            let color = self.palette_decode(Some(obj), lo + (hi << 1))?;
 
             /*
             eprintln!(
@@ -424,15 +426,13 @@ impl Ppu {
             );
             */
             // If non-transparent
-            if color != 0x00 {
-                let pixel = Pixel {
-                    color,
-                    palette: 0,
-                    bg_priority: 0,
-                };
+            let pixel = Pixel {
+                color,
+                palette: 0,
+                bg_priority: 0,
+            };
 
-                return Some(pixel);
-            }
+            return Some(pixel);
         }
         None
     }
@@ -663,7 +663,7 @@ impl Ppu {
                 for i in (0..8).rev() {
                     let lo = (self.fetch_tile_datalo >> i) & 0x1;
                     let hi = (self.fetch_tile_datahi >> i) & 0x1;
-                    let color = self.palette_decode(lo + (hi << 1));
+                    let color = self.palette_decode(None, lo + (hi << 1)).unwrap();
                     let pixel = Pixel {
                         color,
                         palette: 0,
@@ -687,14 +687,29 @@ impl Ppu {
         }
     }
 
-    pub fn palette_decode(&self, id: u8) -> u8 {
-        let bgp = self.mem_read(BGP);
-        match id {
-            0x0 => bgp & 0x3,
-            0x1 => (bgp >> 2) & 0x3,
-            0x2 => (bgp >> 4) & 0x3,
-            0x3 => (bgp >> 6) & 0x3,
+    pub fn palette_decode(&self, obj: Option<&Oa>, id: u8) -> Option<u8> {
+        let palette = match obj {
+            Some(obj) => {
+                if id == 0 {
+                    return None;
+                }
+                if obj.dmg_palette {
+                    self.mem_read(OBP1)
+                } else {
+                    self.mem_read(OBP0)
+                }
+            }
+            None => self.mem_read(BGP),
+        };
+
+        let color = match id {
+            0x0 => palette & 0x3,
+            0x1 => (palette >> 2) & 0x3,
+            0x2 => (palette >> 4) & 0x3,
+            0x3 => (palette >> 6) & 0x3,
             _ => unreachable!("invalid palette index"),
-        }
+        };
+
+        Some(color)
     }
 }
