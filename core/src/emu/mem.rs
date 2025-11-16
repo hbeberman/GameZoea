@@ -46,6 +46,7 @@ pub struct Memory {
     mbc1rombank: u8,
     mbc1rambank: u8,
     mbc1bankmode: u8,
+    rtc_register: u8,
 }
 
 impl Memory {
@@ -73,6 +74,7 @@ impl Memory {
             mbc1rombank: 0x00,
             mbc1rambank: 0x00,
             mbc1bankmode: 0x00,
+            rtc_register: 0x00,
         }
     }
 
@@ -81,7 +83,16 @@ impl Memory {
         let (mbc, cartridge_type) = Memory::mbc_decode(cartridge);
         let rom_bank_count = Memory::rom_bank_count_decode(cartridge);
         let ram_bank_count = Memory::ram_bank_count_decode(cartridge);
-        mem[0x0000..cartridge.len()].copy_from_slice(cartridge);
+        eprintln!(
+            "MBC {:?} found. cartridge_type:{:02X} rom_banks:#{} ram_banks:#{}",
+            mbc, cartridge_type, rom_bank_count, ram_bank_count
+        );
+        let cap = if cartridge.len() >= 0x8000 {
+            0x8000
+        } else {
+            cartridge.len()
+        };
+        mem[0x0000..cap].copy_from_slice(&cartridge[0x0000..cap]);
         let mem = Memory {
             owner: Comp::Cpu,
             dma: 0,
@@ -105,6 +116,7 @@ impl Memory {
             mbc1rombank: 0x00,
             mbc1rambank: 0x00,
             mbc1bankmode: 0x00,
+            rtc_register: 0x00,
         };
         eprintln!(
             "MEM: rom_bank_count:#{} ram_bank_count:#{} mbc:{:?}",
@@ -118,9 +130,9 @@ impl Memory {
         let mbc = match cartridge_type {
             0x00 => Mbc::None,
             0x01..=0x03 => Mbc::MBC1,
+            0x11..=0x13 => Mbc::MBC3,
             x => todo!("MBC {:02X} not implemented!", x),
         };
-        eprintln!("MBC {:?} found", mbc);
         (mbc, cartridge_type)
     }
 
@@ -391,6 +403,7 @@ impl Memory {
         match &self.mbc {
             Mbc::None => (),
             Mbc::MBC1 => self.mbc1_register_write(),
+            Mbc::MBC3 => self.mbc3_register_write(),
             x => todo!(
                 "ROM write on unimplemented MBC:{:?} addr:{:04X}",
                 x,
@@ -409,10 +422,22 @@ impl Memory {
         }
     }
 
+    pub fn mbc3_register_write(&mut self) {
+        match self.addr {
+            0x0000..=0x1FFF => self.ram_enable = self.data & 0x0A == 0x0A,
+            0x2000..=0x3FFF => self.mbc1rombank = self.data & 0x1F,
+            0x4000..=0x5FFF => self.mbc1rambank = self.data & 0x3,
+            0x6000..=0x7FFF => self.mbc1bankmode = self.data & 0x1,
+            0xA000..=0xBFFF => self.rtc_register = self.data & 0x1,
+            _ => unreachable!("Invalid addr:{:04X} for MBC1 write", self.addr),
+        }
+    }
+
     pub fn mbc_read(&mut self) -> u8 {
         match &self.mbc {
             Mbc::None => self.mem[self.addr as usize],
             Mbc::MBC1 => self.mbc1_read(),
+            Mbc::MBC3 => self.mbc3_read(),
             x => todo!("Read on unimplemented MBC:{:?} addr:{:04X}", x, self.addr),
         }
     }
@@ -428,7 +453,32 @@ impl Memory {
         }
     }
 
+    pub fn mbc3_read(&mut self) -> u8 {
+        match self.addr {
+            0x0000..=0x7FFF => {
+                let cart_addr = self.mbc3_rom_addr(self.addr);
+                self.cartridge[cart_addr]
+            }
+            0xA000..=0xBFFF => self.mem[self.addr as usize],
+            _ => unreachable!("Invalid mbc1 read decode addr:{:04X}", self.addr),
+        }
+    }
+
     fn mbc1_rom_addr(&self, addr: u16) -> usize {
+        // TODO: Block accessing banks 0x20, 0x40, and 0x60
+        let offset = (addr as usize) & 0x3FFF;
+        let bank = match addr {
+            0x0000..=0x3FFF => self.mbc1_fixed_rom_bank(),
+            0x4000..=0x7FFF => self.mbc1_switchable_rom_bank(),
+            _ => unreachable!("Invalid ROM decode addr:{:04X}", addr),
+        };
+        let rom_len = self.cartridge.len();
+        debug_assert!(rom_len > 0, "cartridge must contain data");
+        ((bank << 14) | offset) % rom_len
+    }
+
+    fn mbc3_rom_addr(&self, addr: u16) -> usize {
+        // TODO: Support accessing banks 0x20, 0x40, and 0x60
         let offset = (addr as usize) & 0x3FFF;
         let bank = match addr {
             0x0000..=0x3FFF => self.mbc1_fixed_rom_bank(),
