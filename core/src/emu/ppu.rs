@@ -207,7 +207,7 @@ impl Ppu {
         ppu
     }
 
-    pub fn tick(&mut self, t: u128) {
+    pub fn tick(&mut self, t: u64) {
         let _ = t;
         let lcdc = self.mem_read(LCDC);
         let lcd_enabled = (lcdc & 0x80) != 0;

@@ -2837,12 +2837,12 @@ impl Cpu {
     // }}}
 
     // {{{ Cycle Functions
-    pub fn tick(&mut self, t: u128) {
+    pub fn tick(&mut self, t: u64) {
         self.own(true);
         if self.dbg_break >= 2 {
             //            panic!("Mooneye break!");
         }
-        if t.is_multiple_of(4) {
+        if t & 0x3 == 0 {
             if !self.halted {
                 self.execute();
             }

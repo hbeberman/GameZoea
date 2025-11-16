@@ -108,10 +108,10 @@ impl Joypad {
         joypad
     }
 
-    pub fn tick(&mut self, t: u128) {
+    pub fn tick(&mut self, t: u64) {
         self.own(true);
 
-        if t.is_multiple_of(4) {
+        if t & 0x3 == 0 {
             self.check_queue();
         }
 

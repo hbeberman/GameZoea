@@ -6,7 +6,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    const MOONEYE_STEPS: u128 = 80_000_000;
+    const MOONEYE_STEPS: u64 = 80_000_000;
 
     fn load_mooneye_rom(path: &str) -> Vec<u8> {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");

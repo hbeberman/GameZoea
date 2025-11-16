@@ -6,7 +6,7 @@ use std::{env, fs, process, sync::mpsc, thread, time::Duration};
 const DEFAULT_SCALE: u32 = 1;
 
 fn main() {
-    let (scale, rom, steps, run_duration) = parse_args();
+    let (scale, rom, steps, run_duration, uncapped) = parse_args();
 
     let rom_path = match rom {
         Some(rom) => {
@@ -58,7 +58,7 @@ fn main() {
         return;
     }
 
-    run_windowed(rom_data, scale);
+    run_windowed(rom_data, scale, uncapped);
 }
 
 fn parse_args() -> (
@@ -66,6 +66,7 @@ fn parse_args() -> (
     Option<std::path::PathBuf>,
     Option<u64>,
     Option<Duration>,
+    bool,
 ) {
     let mut args = env::args();
     let _ = args.next();
@@ -74,6 +75,7 @@ fn parse_args() -> (
     let mut path = None;
     let mut steps = None;
     let mut seconds = None;
+    let mut uncapped = false;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -166,6 +168,9 @@ fn parse_args() -> (
                 usage();
                 process::exit(0);
             }
+            "--uncapped" => {
+                uncapped = true;
+            }
             _ => {
                 eprintln!("Unknown argument: {arg}");
                 usage();
@@ -180,7 +185,13 @@ fn parse_args() -> (
         process::exit(1);
     }
 
-    (scale, path, steps, seconds.map(Duration::from_secs_f64))
+    (
+        scale,
+        path,
+        steps,
+        seconds.map(Duration::from_secs_f64),
+        uncapped,
+    )
 }
 
 fn usage() {
@@ -191,6 +202,7 @@ fn usage() {
     println!("                [--rom <rom.gb>]");
     println!("                [--steps <number of CPU cycles to run, 0 or omitted = run forever>]");
     println!("                [--seconds <positive number of seconds to run before exiting>]");
+    println!("                [--uncapped (run headed mode without throttling)]");
 }
 
 fn run_headless(
@@ -207,16 +219,16 @@ fn run_headless(
                 }
             }
             (None, Some(duration)) => {
-                gameboy.run_for(None, duration);
+                gameboy.run_for(None, duration, false);
             }
-            (None, None) => gameboy.run(None),
+            (None, None) => gameboy.run(None, false),
         }
     });
 
     gameboy_thread.join().unwrap();
 }
 
-fn run_windowed(rom_data: Box<[u8]>, scale: u32) {
+fn run_windowed(rom_data: Box<[u8]>, scale: u32, uncapped: bool) {
     let mut threads = vec![];
     let (frame_tx, frame_rx) = window::create_frame_channel();
     let (control_tx, control_rx) = mpsc::channel::<control::ControlMessage>();
@@ -230,7 +242,7 @@ fn run_windowed(rom_data: Box<[u8]>, scale: u32) {
 
     let gameboy_thread = thread::spawn(move || {
         let mut gameboy = Gameboy::dmg(&rom_data, frame_tx);
-        gameboy.run(Some(control_rx));
+        gameboy.run(Some(control_rx), !uncapped);
     });
     threads.push(gameboy_thread);
 

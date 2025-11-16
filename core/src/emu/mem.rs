@@ -413,7 +413,7 @@ impl Memory {
         self.mem[addr as usize] = data
     }
 
-    pub fn tick(&mut self, _t: u128) {
+    pub fn tick(&mut self, _t: u64) {
         if self.dma_start_delay > 0 {
             self.dma_start_delay -= 1;
             if self.dma_start_delay == 0 {

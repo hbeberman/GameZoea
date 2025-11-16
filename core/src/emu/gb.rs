@@ -12,9 +12,12 @@ use crate::emu::timer::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc::TryRecvError;
+use std::thread;
 use std::time::{Duration, Instant};
 
 const NORMAL_CLOCK: f64 = 1.0 / 4_194_304.0;
+const THROTTLE_BATCH_CYCLES: u32 = 8192;
+const THROTTLE_SLEEP_GRACE_US: u64 = 100;
 
 const L_CPU: u8 = 1 << 0;
 const L_ADJ: u8 = 1 << 1;
@@ -34,7 +37,7 @@ pub enum Comp {
 
 #[allow(dead_code)]
 pub struct Gameboy {
-    pub t: u128,
+    pub t: u64,
     pub cpu: Cpu,
     pub ppu: Ppu,
     pub timer: Timer,
@@ -83,8 +86,9 @@ impl Gameboy {
         }
     }
 
-    pub fn tick(&mut self, count: u128) {
-        for _ in 0..count {
+    pub fn tick(&mut self, count: u64) {
+        let mut remaining = count;
+        while remaining > 0 {
             let cur = self.cpu.retired();
 
             self.with_mem_mut(|mem| mem.tick(self.t));
@@ -94,6 +98,7 @@ impl Gameboy {
             self.serial.tick(self.t);
             self.joypad.tick(self.t);
             self.t += 1;
+            remaining -= 1;
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
@@ -102,7 +107,7 @@ impl Gameboy {
         }
     }
 
-    pub fn step(&mut self, count: u128) {
+    pub fn step(&mut self, count: u64) {
         let mut i = count;
         while i > 0 {
             let cur = self.cpu.retired();
@@ -115,7 +120,7 @@ impl Gameboy {
         }
     }
 
-    pub fn step_blargg(&mut self, count: u128, check: &str) {
+    pub fn step_blargg(&mut self, count: u64, check: &str) {
         let mut i = count;
         let expected = format!("{}\n\n\nPassed\n", check);
         while i > 0 {
@@ -133,7 +138,7 @@ impl Gameboy {
         }
     }
 
-    pub fn step_mooneye(&mut self, count: u128) {
+    pub fn step_mooneye(&mut self, count: u64) {
         let mut i = count;
         let pass = [3, 5, 8, 13, 21, 34];
         let fail = [0x42; 6];
@@ -152,23 +157,33 @@ impl Gameboy {
         }
     }
 
-    pub fn run(&mut self, control_rx: Option<ControlReceiver>) {
-        self.run_with_deadline(control_rx, None);
+    pub fn run(&mut self, control_rx: Option<ControlReceiver>, throttle_cycles: bool) {
+        self.run_with_deadline(control_rx, None, throttle_cycles);
     }
 
-    pub fn run_for(&mut self, control_rx: Option<ControlReceiver>, duration: Duration) {
-        self.run_with_deadline(control_rx, Some(duration));
+    pub fn run_for(
+        &mut self,
+        control_rx: Option<ControlReceiver>,
+        duration: Duration,
+        throttle_cycles: bool,
+    ) {
+        self.run_with_deadline(control_rx, Some(duration), throttle_cycles);
     }
 
     fn run_with_deadline(
         &mut self,
         control_rx: Option<ControlReceiver>,
         limit: Option<Duration>,
+        throttle_cycles: bool,
     ) {
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
+        let throttle_batch = THROTTLE_BATCH_CYCLES as u64;
+        let throttle_batch_duration =
+            normal_cycle.mul_f64(THROTTLE_BATCH_CYCLES as f64);
         let _double_cycle = Duration::from_secs_f64(NORMAL_CLOCK / 2.0);
         let mut animate = Instant::now() + Duration::from_secs_f64(0.5);
         let stop_time = limit.map(|d| Instant::now() + d);
+        let mut next_cycle_deadline = Instant::now();
 
         loop {
             if let Some(limit) = stop_time {
@@ -178,15 +193,31 @@ impl Gameboy {
                 }
             }
 
-            self.tick(1);
-            let target = Instant::now() + normal_cycle;
-            while Instant::now() < target {
+            if throttle_cycles {
+                self.tick(throttle_batch);
                 if let Some(limit) = stop_time {
                     if Instant::now() >= limit {
                         println!("{}", self.serial.buffmt());
                         return;
                     }
                 }
+                next_cycle_deadline += throttle_batch_duration;
+                let now = Instant::now();
+                if now < next_cycle_deadline {
+                    let remaining = next_cycle_deadline - now;
+                    let grace =
+                        Duration::from_micros(THROTTLE_SLEEP_GRACE_US);
+                    if remaining > grace {
+                        thread::sleep(remaining - grace);
+                    }
+                    while Instant::now() < next_cycle_deadline {
+                        std::hint::spin_loop();
+                    }
+                } else {
+                    next_cycle_deadline = now;
+                }
+            } else {
+                self.tick(1);
             }
             if Instant::now() > animate {
                 self.ppu.testing = self.ppu.testing.wrapping_add(1);

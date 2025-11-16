@@ -51,10 +51,10 @@ impl Timer {
         (counter & Self::timer_bit_mask(tac)) != 0
     }
 
-    pub fn tick(&mut self, t: u128) {
+    pub fn tick(&mut self, t: u64) {
         self.own(true);
 
-        if t.is_multiple_of(4) {
+        if t & 0x3 == 0 {
             self.set_tima_overflow(false);
         }
         self.internal_tma = self.mem_read(TMA);
@@ -101,7 +101,7 @@ impl Timer {
             prev_signal = signal_after;
         }
 
-        if t.is_multiple_of(4) && !skip_counter_tick {
+        if t & 0x3 == 0 && !skip_counter_tick {
             self.system_counter = (self.system_counter + 1) & 0x3FFF;
             let div = (self.system_counter >> 6) as u8;
             self.mem_write(DIV, div);
