@@ -127,6 +127,7 @@ pub struct Ppu {
     fetch_tile_datahi: u8,
     lcd_was_enabled: bool, // Track LCD emut nable state
     already_interrupted: bool,
+    window_mode: bool,
 }
 
 #[allow(dead_code)]
@@ -158,6 +159,7 @@ impl Ppu {
             fetch_tile_datahi: 0x00,
             lcd_was_enabled: false,
             already_interrupted: false,
+            window_mode: false,
         };
 
         ppu.mem_write(LCDC, 0x91);
@@ -193,6 +195,7 @@ pub struct PpuState {
     fetch_tile_datahi: u8,
     lcd_was_enabled: bool,
     already_interrupted: bool,
+    window_mode: bool,
 }
 
 impl Ppu {
@@ -215,6 +218,7 @@ impl Ppu {
             fetch_tile_datahi: 0x00,
             lcd_was_enabled: false,
             already_interrupted: false,
+            window_mode: false,
         };
 
         ppu.mem_write(LCDC, 0x91);
@@ -254,7 +258,7 @@ impl Ppu {
             }
         }
 
-        let mode = self.mode.clone();
+        let mode = self.mode;
         match mode {
             Mode::M0 => self.hblank(),
             Mode::M1 => self.vblank(),
@@ -303,6 +307,7 @@ impl Ppu {
 
     pub fn oamscan(&mut self) {
         if self.dot == 80 {
+            self.window_mode = false;
             self.objects.clear();
             self.read_oam();
             // Sort OAM by x position then priority
@@ -376,6 +381,7 @@ impl Ppu {
                 self.dot = 80;
                 self.set_ly(0);
                 self.x = 0;
+                self.window_mode = false;
                 self.reset_fetch_pipeline();
                 let Some(frame_tx) = &self.frame_tx else {
                     return;
@@ -458,6 +464,7 @@ impl Ppu {
                 bg_priority: 0,
             };
 
+            // TODO: return priority attribute of the chosen object
             return Some(pixel);
         }
         None
@@ -526,15 +533,25 @@ impl Ppu {
         data
     }
 
-    pub fn read_tile(&mut self, x: u8, y: u8) -> u8 {
-        // TODO: Need to handle windowing and tilemapping
-
-        let map = 0x00;
-        match map {
-            0x00 => self.mem_read(0x9800 + x as u16 + (y as u16) * 32),
-            0x01 => self.mem_read(0x9C00 + x as u16 + (y as u16) * 32),
-            _ => panic!("Invalid tile map value used!"),
+    fn tile_map_base(&self, window: bool) -> u16 {
+        let lcdc = self.mem_read(LCDC);
+        if window {
+            if isbitset!(lcdc, 6) {
+                0x9C00
+            } else {
+                0x9800
+            }
+        } else if isbitset!(lcdc, 3) {
+            0x9C00
+        } else {
+            0x9800
         }
+    }
+
+    pub fn read_tile(&mut self, x: u8, y: u8, window: bool) -> u8 {
+        let base = self.tile_map_base(window);
+        let addr = base + x as u16 + (y as u16) * 32;
+        self.mem_read(addr)
     }
 
     fn with_mem_mut<R>(&self, f: impl FnOnce(&mut Memory) -> R) -> R {
@@ -655,29 +672,52 @@ impl Ppu {
         let x = self.x;
         let y = self.ly();
 
+        let wy = self.mem_read(WY);
+        let wx = self.mem_read(WX);
+        let lcdc = self.mem_read(LCDC);
+        let scx = self.mem_read(SCX);
+        let scy = self.mem_read(SCY);
+
+        let pending_x = x.wrapping_add(self.bg_fifo.len() as u8);
+        let window_origin_x = wx.saturating_sub(7);
+
+        // Toggle on window mode if we hit the top left corner of the window
+        if !self.window_mode && isbitset!(lcdc, 5) && y >= wy && pending_x >= window_origin_x {
+            self.window_mode = true;
+            self.bg_fifo.clear();
+            self.fetch_state = Fetch::Tile_;
+        };
+
         match self.fetch_state {
             Fetch::Tile => {
-                let scx = self.mem_read(SCX);
-                let scy = self.mem_read(SCY);
+                let screen_x = pending_x;
+                let (tile_x, tile_y) = if self.window_mode {
+                    let win_x = screen_x.saturating_sub(window_origin_x);
+                    let win_y = y.saturating_sub(wy);
+                    ((win_x / 8) % 32, (win_y / 8) % 32)
+                } else {
+                    let bg_x = screen_x.wrapping_add(scx);
+                    let bg_y = y.wrapping_add(scy);
+                    ((bg_x / 8) % 32, (bg_y / 8) % 32)
+                };
 
-                let screen_x = x.wrapping_add(self.bg_fifo.len() as u8);
-                let bg_x = screen_x.wrapping_add(scx);
-                let bg_y = y.wrapping_add(scy);
-
-                let tile_x = (bg_x / 8) % 32;
-                let tile_y = (bg_y / 8) % 32;
-
-                self.fetch_tile = self.read_tile(tile_x, tile_y);
+                self.fetch_tile = self.read_tile(tile_x, tile_y, self.window_mode);
             }
             Fetch::DataLo => {
-                let scy = self.mem_read(SCY);
-                let tile_row = y.wrapping_add(scy) % 8;
+                let tile_row = if self.window_mode {
+                    y.saturating_sub(wy) % 8
+                } else {
+                    y.wrapping_add(scy) % 8
+                };
                 let addr = self.tile_address_lo(false, self.fetch_tile, tile_row);
                 self.fetch_tile_datalo = self.mem_read(addr);
             }
             Fetch::DataHi => {
-                let scy = self.mem_read(SCY);
-                let tile_row = y.wrapping_add(scy) % 8;
+                let tile_row = if self.window_mode {
+                    y.saturating_sub(wy) % 8
+                } else {
+                    y.wrapping_add(scy) % 8
+                };
                 let addr = self.tile_address_lo(false, self.fetch_tile, tile_row) + 1;
                 self.fetch_tile_datahi = self.mem_read(addr);
             }
@@ -755,6 +795,7 @@ impl Ppu {
             fetch_tile_datahi: self.fetch_tile_datahi,
             lcd_was_enabled: self.lcd_was_enabled,
             already_interrupted: self.already_interrupted,
+            window_mode: self.window_mode,
         }
     }
 
@@ -774,5 +815,6 @@ impl Ppu {
         self.fetch_tile_datahi = state.fetch_tile_datahi;
         self.lcd_was_enabled = state.lcd_was_enabled;
         self.already_interrupted = state.already_interrupted;
+        self.window_mode = state.window_mode;
     }
 }
