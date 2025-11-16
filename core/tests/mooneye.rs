@@ -110,7 +110,6 @@ mod tests {
         "tests/roms/mooneye/acceptance/call_cc_timing.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_acceptance_call_cc_timing2_gb,
         "tests/roms/mooneye/acceptance/call_cc_timing2.gb"
     );
@@ -382,7 +381,6 @@ mod tests {
         "tests/roms/mooneye/emulator-only/mbc1/bits_bank1.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_emulator_only_mbc1_bits_bank2_gb,
         "tests/roms/mooneye/emulator-only/mbc1/bits_bank2.gb"
     );
@@ -403,12 +401,10 @@ mod tests {
     );
     */
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_emulator_only_mbc1_ram_256kb_gb,
         "tests/roms/mooneye/emulator-only/mbc1/ram_256kb.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_emulator_only_mbc1_ram_64kb_gb,
         "tests/roms/mooneye/emulator-only/mbc1/ram_64kb.gb"
     );
@@ -430,7 +426,6 @@ mod tests {
         "tests/roms/mooneye/emulator-only/mbc1/rom_2Mb.gb"
     );
     mooneye_test!(
-        #[ignore = "TODO"]
         mooneye_emulator_only_mbc1_rom_4mb_gb,
         "tests/roms/mooneye/emulator-only/mbc1/rom_4Mb.gb"
     );
