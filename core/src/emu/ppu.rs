@@ -77,6 +77,16 @@ pub struct Oa {
     cgb_palette: u8,
 }
 
+impl Oa {
+    fn screen_x(&self) -> i16 {
+        self.x as i16 - 8
+    }
+
+    fn screen_y(&self) -> i16 {
+        self.y as i16 - 16
+    }
+}
+
 impl std::fmt::Display for Oa {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
@@ -242,16 +252,19 @@ impl Ppu {
             pri -= 1;
 
             let lcdc = self.mem_read(LCDC);
-            let obj_size = if isbitset!(lcdc, 2) { 16 } else { 8 };
-            if (oa.y..(oa.y + obj_size)).contains(&self.ly()) {
+            let obj_size: u8 = if isbitset!(lcdc, 2) { 16 } else { 8 };
+            let sprite_y = oa.screen_y();
+            let obj_height = i16::from(obj_size);
+            let ly = self.ly() as i16;
+
+            if ly >= sprite_y && ly < sprite_y + obj_height {
                 if oa.x != 0 || oa.y != 0 {
-                    eprintln!(
-                        "OBJECT HIT ly:{} obj:{} obj_size:{} pri:{}",
-                        self.ly(),
-                        oa,
-                        obj_size,
-                        oa.pri,
-                    );
+                    /*
+                                        eprintln!(
+                                            "OBJECT HIT ly:{} obj_screen_y:{} obj:{} obj_size:{} pri:{}",
+                                            ly, sprite_y, oa, obj_size, oa.pri,
+                                        );
+                    */
                 }
                 self.objects.push(oa);
 
@@ -354,42 +367,58 @@ impl Ppu {
     }
 
     pub fn fetch_obj_pixel(&mut self) -> Option<Pixel> {
+        let lcdc = self.mem_read(LCDC);
+        let obj_size: u8 = if isbitset!(lcdc, 2) { 16 } else { 8 };
+        let screen_x = self.x as i16;
+        let screen_y = self.ly() as i16;
+
         for obj in &self.objects {
-            if (obj.x..obj.x + 8).contains(&self.x) {
-                // Obj Hit
-                let x_idx = self.x - obj.x;
-                let y_idx = self.ly() - obj.y;
+            let sprite_x = obj.screen_x();
+            if screen_x < sprite_x || screen_x >= sprite_x + 8 {
+                continue;
+            }
 
-                let addr = self.tile_address_lo(true, obj.index, y_idx);
-                let datalo = self.mem_read(addr);
-                let addr = self.tile_address_lo(true, obj.index, y_idx) + 1;
-                let datahi = self.mem_read(addr);
+            let sprite_y = obj.screen_y();
+            if screen_y < sprite_y || screen_y >= sprite_y + i16::from(obj_size) {
+                continue;
+            }
 
-                let lo = (datalo >> x_idx) & 0x1;
-                let hi = (datahi >> x_idx) & 0x1;
-                let color = self.palette_decode(lo + (hi << 1));
+            // Obj Hit
+            let x_idx = (screen_x - sprite_x) as u8;
+            let y_idx = (screen_y - sprite_y) as u8;
 
-                eprintln!(
-                    "obj.x#{} self.x#{} obj.y#{} self.ly#{} index{} color{}",
-                    obj.x,
-                    self.x,
-                    obj.y,
-                    self.ly(),
-                    obj.index,
+            let addr = self.tile_address_lo(true, obj.index, y_idx);
+            let datalo = self.mem_read(addr);
+            let addr = self.tile_address_lo(true, obj.index, y_idx) + 1;
+            let datahi = self.mem_read(addr);
+
+            let bit_index = 7 - x_idx;
+            let lo = (datalo >> bit_index) & 0x1;
+            let hi = (datahi >> bit_index) & 0x1;
+            let color = self.palette_decode(lo + (hi << 1));
+
+            /*
+            eprintln!(
+                "obj_screen_x#{} obj_raw_x#{} self.x#{} obj_screen_y#{} obj_raw_y#{} self.ly#{} index{} color{}",
+                sprite_x,
+                obj.x,
+                self.x,
+                sprite_y,
+                obj.y,
+                self.ly(),
+                obj.index,
+                color,
+            );
+            */
+            // If non-transparent
+            if color != 0x00 {
+                let pixel = Pixel {
                     color,
-                );
-                // If non-transparent
-                if color != 0x00 {
-                    let pixel = Pixel {
-                        color,
-                        palette: 0,
-                        bg_priority: 0,
-                    };
+                    palette: 0,
+                    bg_priority: 0,
+                };
 
-                    return Some(pixel);
-                } else {
-                    eprintln!("TRANSPARENT!");
-                }
+                return Some(pixel);
             }
         }
         None
