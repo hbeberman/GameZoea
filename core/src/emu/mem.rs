@@ -522,7 +522,7 @@ impl Memory {
         match self.addr {
             0x0000..=0x1FFF => self.ram_enable = self.data & 0x0F == 0x0A,
             0x2000..=0x3FFF => {
-                let mut bank = self.data & 0x7F;
+                let mut bank = self.data;
                 if bank == 0 {
                     bank = 1;
                 }
@@ -610,7 +610,7 @@ impl Memory {
     }
 
     fn mbc3_current_rom_bank(&self) -> usize {
-        let mut bank = (self.mbc3_rom_bank as usize) & 0x7F;
+        let mut bank = self.mbc3_rom_bank as usize;
         if bank == 0 {
             bank = 1;
         }
@@ -618,11 +618,7 @@ impl Memory {
         if total == 0 {
             return 0;
         }
-        let mut normalized = bank % total;
-        if normalized == 0 && total > 1 {
-            normalized = 1;
-        }
-        normalized
+        bank % total
     }
 
     fn mbc1_fixed_rom_bank(&self) -> usize {
@@ -867,6 +863,24 @@ impl Memory {
 mod tests {
     use super::*;
 
+    fn encode_rom_size(bank_count: usize) -> u8 {
+        match bank_count {
+            2 => 0x00,
+            4 => 0x01,
+            8 => 0x02,
+            16 => 0x03,
+            32 => 0x04,
+            64 => 0x05,
+            128 => 0x06,
+            256 => 0x07,
+            512 => 0x08,
+            72 => 0x52,
+            80 => 0x53,
+            96 => 0x54,
+            _ => panic!("unsupported bank count {}", bank_count),
+        }
+    }
+
     fn build_mbc3_test_rom(bank_count: usize) -> Vec<u8> {
         assert!(bank_count >= 2, "need at least two banks for testing");
         let mut rom = vec![0u8; bank_count * 0x4000];
@@ -876,7 +890,7 @@ mod tests {
             rom[start..start + 0x4000].fill(fill);
         }
         rom[CART_TYPE] = 0x11; // MBC3
-        rom[CART_SIZE] = 0x01; // 4 banks (64 KiB)
+        rom[CART_SIZE] = encode_rom_size(bank_count);
         rom[CART_RAM] = 0x03; // 32 KiB RAM (unused but realistic)
         rom
     }
@@ -943,5 +957,19 @@ mod tests {
         mem.set_addr(0xA000);
         mem.read();
         assert_eq!(mem.data(), 0x77);
+    }
+
+    #[test]
+    fn mbc3_allows_high_bank_numbers() {
+        let rom = build_mbc3_test_rom(256);
+        let mut mem = Memory::new(&rom);
+
+        mem.set_addr(0x2000);
+        mem.set_data(0xFE);
+        mem.write();
+
+        mem.set_addr(0x4000);
+        mem.read();
+        assert_eq!(mem.data(), 0xFE);
     }
 }
