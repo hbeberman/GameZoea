@@ -387,12 +387,25 @@ impl Ppu {
             let x_idx = (screen_x - sprite_x) as u8;
             let y_idx = (screen_y - sprite_y) as u8;
 
-            let addr = self.tile_address_lo(true, obj.index, y_idx);
+            let obji = obj.index
+                + if obj.yflip {
+                    if y_idx > 7 { 0 } else { 1 }
+                } else {
+                    if y_idx > 7 { 1 } else { 0 }
+                };
+
+            let y_idx = if obj.yflip {
+                7 - (y_idx % 8)
+            } else {
+                y_idx % 8
+            };
+
+            let addr = self.tile_address_lo(true, obji, y_idx);
             let datalo = self.mem_read(addr);
-            let addr = self.tile_address_lo(true, obj.index, y_idx) + 1;
+            let addr = self.tile_address_lo(true, obji, y_idx) + 1;
             let datahi = self.mem_read(addr);
 
-            let bit_index = 7 - x_idx;
+            let bit_index = if obj.xflip { x_idx } else { 7 - x_idx };
             let lo = (datalo >> bit_index) & 0x1;
             let hi = (datahi >> bit_index) & 0x1;
             let color = self.palette_decode(lo + (hi << 1));
