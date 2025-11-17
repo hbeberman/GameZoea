@@ -2,6 +2,7 @@ use crate::app::{
     control::{ControlMessage, ControlReceiver},
     window::*,
 };
+use crate::dump;
 use crate::emu::cpu::{Cpu, CpuState};
 use crate::emu::joypad::{Joypad, JoypadSnapshot};
 use crate::emu::mem::Memory;
@@ -31,8 +32,9 @@ const L_TIMER: u8 = 1 << 2;
 const L_R: u8 = 1 << 3;
 const L_MEM: u8 = 1 << 4;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub enum Comp {
+    #[default]
     None,
     Cpu,
     Ppu,
@@ -50,6 +52,10 @@ pub struct Gameboy {
     pub serial: Serial,
     pub joypad: Joypad,
     mem: Rc<RefCell<Memory>>,
+}
+
+struct ActiveDumpGuard {
+    pushed: bool,
 }
 
 impl Gameboy {
@@ -108,12 +114,13 @@ impl Gameboy {
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
-                //self.log_status(L_CPU + L_TIMER + L_MEM);
+                self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
 
     pub fn step(&mut self, count: u64) {
+        let _dump_guard = ActiveDumpGuard::new(self);
         let mut i = count;
         while i > 0 {
             let cur = self.cpu.retired();
@@ -127,6 +134,7 @@ impl Gameboy {
     }
 
     pub fn step_blargg(&mut self, count: u64, check: &str) {
+        let _dump_guard = ActiveDumpGuard::new(self);
         let mut i = count;
         let expected = format!("{}\n\n\nPassed\n", check);
         while i > 0 {
@@ -145,6 +153,7 @@ impl Gameboy {
     }
 
     pub fn step_mooneye(&mut self, count: u64) {
+        let _dump_guard = ActiveDumpGuard::new(self);
         let mut i = count;
         let pass = [3, 5, 8, 13, 21, 34];
         let fail = [0x42; 6];
@@ -203,6 +212,7 @@ impl Gameboy {
         limit: Option<Duration>,
         throttle_cycles: bool,
     ) {
+        let _dump_guard = ActiveDumpGuard::new(self);
         let normal_cycle = Duration::from_secs_f64(NORMAL_CLOCK);
         let throttle_batch = THROTTLE_BATCH_CYCLES as u64;
         let throttle_batch_duration = normal_cycle.mul_f64(THROTTLE_BATCH_CYCLES as f64);
@@ -260,7 +270,7 @@ impl Gameboy {
                         }
                         Ok(ControlMessage::DumpState) => match self.dump_to_file() {
                             Ok(path) => {
-                                println!("State dumped to {}", path.display());
+                                eprintln!("State dumped to {}", path.display());
                             }
                             Err(err) => {
                                 eprintln!("Failed to dump state: {err}");
@@ -296,6 +306,15 @@ impl Gameboy {
         };
         if pc == 0x0000 {
             return;
+        }
+
+        // Dont print while halted
+        if self.mem_dbg_read(pc) == 0x76 {
+            return;
+        }
+
+        if pc == 0x711a {
+            dump!();
         }
 
         let regs_view = self.cpu.log_view(adj);
@@ -348,7 +367,7 @@ impl Gameboy {
         };
 
         let memstr = if mem {
-            let addr = [P1, IF, IE];
+            let addr = [SCX, STAT, LY, LYC, IF, IE, STAT];
             let s = format!(
                 "||{}",
                 addr.iter()
@@ -377,7 +396,7 @@ impl Gameboy {
         f(&mut mem)
     }
 
-    pub fn save_state(&mut self) -> GameboyState {
+    pub fn save_state(&self) -> GameboyState {
         let memory = self.with_mem_mut(|mem| mem.snapshot());
         GameboyState {
             t: self.t,
@@ -409,19 +428,84 @@ impl Gameboy {
         self.cpu.load_state(&cpu);
     }
 
-    pub fn dump_to_file(&mut self) -> io::Result<PathBuf> {
+    fn dump_state_to(&self, path: PathBuf) -> io::Result<PathBuf> {
         let state = self.save_state();
         let data =
-            bincode::serialize(&state).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-        let guid = Uuid::new_v4();
-        let filename = format!("{guid}.core");
-        let path = env::current_dir()?.join(filename);
+            serde_json::to_vec(&state).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         fs::write(&path, data)?;
         Ok(path)
     }
+
+    pub fn dump_to_file(&self) -> io::Result<PathBuf> {
+        let guid = Uuid::new_v4();
+        let filename = format!("{guid}.core");
+        let path = env::current_dir()?.join(filename);
+        self.dump_state_to(path)
+    }
+
+    pub fn dump_to_named_file<P: AsRef<Path>>(&self, filename: P) -> io::Result<PathBuf> {
+        let filename = filename.as_ref();
+        let path = if filename.is_absolute() {
+            filename.to_path_buf()
+        } else {
+            env::current_dir()?.join(filename)
+        };
+        self.dump_state_to(path)
+    }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+thread_local! {
+    static ACTIVE_DUMP_STACK: RefCell<Vec<*const Gameboy>> = RefCell::new(Vec::new());
+}
+
+impl ActiveDumpGuard {
+    fn new(gameboy: &Gameboy) -> Self {
+        let ptr = gameboy as *const Gameboy;
+        let pushed = ACTIVE_DUMP_STACK.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            if stack.last().copied() == Some(ptr) {
+                false
+            } else {
+                stack.push(ptr);
+                true
+            }
+        });
+        ActiveDumpGuard { pushed }
+    }
+}
+
+impl Drop for ActiveDumpGuard {
+    fn drop(&mut self) {
+        if self.pushed {
+            ACTIVE_DUMP_STACK.with(|stack| {
+                let mut stack = stack.borrow_mut();
+                stack.pop();
+            });
+        }
+    }
+}
+
+pub fn manual_dump(filename: Option<PathBuf>) -> io::Result<PathBuf> {
+    ACTIVE_DUMP_STACK.with(|stack| {
+        let stack = stack.borrow();
+        match stack.last() {
+            Some(&ptr) => unsafe {
+                let gb = &*ptr;
+                match filename {
+                    Some(path) => gb.dump_to_named_file(path),
+                    None => gb.dump_to_file(),
+                }
+            },
+            None => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "dump!() called without an active Gameboy",
+            )),
+        }
+    })
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct GameboyState {
     t: u64,
     memory: Memory,
@@ -435,7 +519,10 @@ pub struct GameboyState {
 impl GameboyState {
     pub fn from_path(path: &Path) -> io::Result<Self> {
         let data = fs::read(path)?;
-        bincode::deserialize(&data).map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        // Try JSON first (new format), fall back to bincode (old format)
+        serde_json::from_slice(&data)
+            .or_else(|_| bincode::deserialize(&data))
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
     }
 
     pub fn cartridge_bytes(&self) -> &[u8] {

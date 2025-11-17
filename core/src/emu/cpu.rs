@@ -158,7 +158,7 @@ impl OverflowingSub8 for u8 {
 // }}}
 
 // {{{ Cycle Enums
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Mc {
     M7,
     M6,
@@ -167,6 +167,7 @@ pub enum Mc {
     M3,
     M2,
     M1,
+    #[default]
     M0,
 }
 use Mc::*;
@@ -188,7 +189,7 @@ impl Mc {
 }
 // }}}
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, Default)]
 pub struct Registers {
     ir: u8,
     ie: u8,
@@ -218,7 +219,8 @@ pub struct Cpu {
     dbg_break: u8,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct CpuState {
     r: Registers,
     log_regs_prev: Registers,
@@ -412,6 +414,7 @@ impl Cpu {
                     Cpu::int_vblank
                 } else if hit & 0x02 != 0 {
                     self.mem_dbg_write(0xFF0F, reg_if & !0x02);
+                    eprintln!("STAT INTERRUPT");
                     self.push_pc(0x0048);
                     Cpu::int_stat
                 } else if hit & 0x04 != 0 {
@@ -425,7 +428,6 @@ impl Cpu {
                 } else if hit & 0x10 != 0 {
                     self.mem_dbg_write(0xFF0F, reg_if & !0x10);
                     self.push_pc(0x0060);
-                    eprintln!("JOYPAD!!!!!!!!!!!!!!!!!!!!!!!!");
                     Cpu::int_joypad
                 } else {
                     panic!("Invalid value in interrupt registers");

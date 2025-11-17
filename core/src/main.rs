@@ -285,11 +285,14 @@ fn run_windowed(rom_data: Box<[u8]>, scale: u32, uncapped: bool, load_state: Opt
     let (frame_tx, frame_rx) = window::create_frame_channel();
     let (control_tx, control_rx) = mpsc::channel::<control::ControlMessage>();
 
-    let window_thread = thread::spawn(move || {
-        if let Err(err) = window::run(scale, frame_rx, control_tx) {
-            eprintln!("Window error: {err}");
-        }
-    });
+    let window_thread = {
+        let control_tx = control_tx.clone();
+        thread::spawn(move || {
+            if let Err(err) = window::run(scale, frame_rx, control_tx) {
+                eprintln!("Window error: {err}");
+            }
+        })
+    };
     threads.push(window_thread);
 
     let gameboy_thread = thread::spawn(move || {

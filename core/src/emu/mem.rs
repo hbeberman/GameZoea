@@ -9,9 +9,10 @@ const DMA_START_DELAY_CYCLES: u8 = 8;
 const OAM_START: usize = 0xFE00;
 const OAM_LEN: usize = 0xA0;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(dead_code)]
 enum Mbc {
+    #[default]
     None,
     MBC1,
     MBC2,
@@ -67,6 +68,12 @@ pub struct Memory {
     rtc_latched: [u8; 5],
     rtc_latch_active: bool,
     rtc_latch_prev: u8,
+}
+
+impl Default for Memory {
+    fn default() -> Self {
+        Memory::empty()
+    }
 }
 
 impl Memory {
@@ -341,6 +348,23 @@ impl Memory {
                 self.mem[addr as usize] = 0;
                 self.write_div = true;
             }
+            STAT => {
+                eprintln!("!!!!!!!!! STAT WRITE {:02x}", data);
+                if data != 0x44 {
+                    panic!();
+                }
+                self.mem[addr as usize] = data & 0xF8;
+            }
+            LYC => {
+                eprintln!("!!!!!!!!! LYC WRITE {:02x}", data);
+                /*
+                match data {
+                    0x4F | 0x20 | 0x00 | 0x02 => (),
+                    _ => panic!(),
+                }
+                */
+                self.mem[addr as usize] = data;
+            }
             TAC => self.set_tac(data),
             0xFF01..0xFF80 => self.mem[addr as usize] = data, // I/O Registers
             0xFF80..0xFFFF => self.mem[addr as usize] = data, // High RAM (HRAM)
@@ -466,9 +490,6 @@ impl Memory {
                 self.mem[OAM_START + byte_index] = value;
             }
             self.dma -= 1;
-            if self.dma == 0 {
-                eprintln!("DMA FINISHED!");
-            };
         }
     }
 
@@ -731,11 +752,7 @@ impl Memory {
 
     fn total_rom_banks(&self) -> usize {
         let banks = self.cartridge.len() / 0x4000;
-        if banks == 0 {
-            1
-        } else {
-            banks
-        }
+        if banks == 0 { 1 } else { banks }
     }
 
     fn total_ram_banks(&self) -> usize {

@@ -15,8 +15,9 @@ pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
 const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Default)]
 enum Mode {
+    #[default]
     M0,
     M1,
     M2,
@@ -34,8 +35,9 @@ impl Mode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 enum Fetch {
+    #[default]
     Tile_,
     Tile,
     DataLo_,
@@ -63,7 +65,7 @@ impl Fetch {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(dead_code)]
 pub struct Oa {
     pri: u8,
@@ -131,7 +133,7 @@ pub struct Ppu {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct Pixel {
     color: u8, // 0..=3
     palette: u8,
@@ -178,7 +180,8 @@ impl Ppu {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct PpuState {
     objects: Vec<Oa>,
     bg_fifo: Vec<Pixel>,
@@ -329,6 +332,14 @@ impl Ppu {
         if self.dot == 0 {
             self.x = 0;
             let ly = self.ly() + 1;
+            eprintln!(
+                "Setting LY to #{}, LYC is #{} IF{:02X} IE{:02X} STAT{:02X}",
+                ly,
+                self.lyc(),
+                self.mem_read(IF),
+                self.mem_read(IE),
+                self.mem_read(STAT),
+            );
             self.set_ly(ly);
             self.dot = if ly == 144 {
                 // Next mode is VBLANK
@@ -637,7 +648,7 @@ impl Ppu {
     pub fn update_stat(&mut self) {
         let mut stat = self.mem_read(STAT);
         if self.ly() == self.lyc() {
-            stat &= bit!(2);
+            stat |= bit!(2);
         } else {
             stat &= !(bit!(2));
         }
@@ -646,17 +657,20 @@ impl Ppu {
 
     pub fn check_interrupt(&mut self) {
         let stat = self.mem_read(STAT);
-        let hit = match self.mode {
-            Mode::M0 => isbitset!(stat, 2),
-            Mode::M1 => isbitset!(stat, 3),
-            Mode::M2 => isbitset!(stat, 4),
-            Mode::M3 => isbitset!(stat, 5),
+        let mode = match self.mode {
+            Mode::M0 => isbitset!(stat, 3),
+            Mode::M1 => isbitset!(stat, 4),
+            Mode::M2 => isbitset!(stat, 5),
+            Mode::M3 => false,
         };
-        if hit {
+        let lyc = (self.ly() == self.lyc()) && isbitset!(stat, 6);
+
+        if mode || lyc {
+            eprintln!("Generating STAT Interrupt:");
             if !self.already_interrupted {
                 self.already_interrupted = true;
                 let mut reg_if = self.mem_read(IF);
-                setbit!(reg_if, 2);
+                setbit!(reg_if, 1);
                 self.mem_write(IF, reg_if);
             }
         } else {

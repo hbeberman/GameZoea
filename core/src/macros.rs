@@ -67,3 +67,32 @@ macro_rules! assert_blargg {
         );
     };
 }
+
+#[macro_export]
+macro_rules! dump {
+    () => {{
+        match $crate::emu::gb::manual_dump(None) {
+            Ok(path) => {
+                eprintln!("State dumped to {}", path.display());
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!("Failed to dump state: {err}");
+                std::process::exit(1);
+            }
+        }
+    }};
+    ($path:expr) => {{
+        let __dump_path = ::std::path::PathBuf::from($path);
+        match $crate::emu::gb::manual_dump(Some(__dump_path)) {
+            Ok(path) => {
+                eprintln!("State dumped to {}", path.display());
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!("Failed to dump state: {err}");
+                std::process::exit(1);
+            }
+        }
+    }};
+}

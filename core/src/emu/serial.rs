@@ -13,7 +13,8 @@ pub struct Serial {
     pub buf: Vec<u8>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct SerialState {
     buf: Vec<u8>,
 }
