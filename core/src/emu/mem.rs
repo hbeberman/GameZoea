@@ -9,9 +9,10 @@ const DMA_START_DELAY_CYCLES: u8 = 8;
 const OAM_START: usize = 0xFE00;
 const OAM_LEN: usize = 0xA0;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(dead_code)]
 enum Mbc {
+    #[default]
     None,
     MBC1,
     MBC2,
@@ -67,6 +68,12 @@ pub struct Memory {
     rtc_latched: [u8; 5],
     rtc_latch_active: bool,
     rtc_latch_prev: u8,
+}
+
+impl Default for Memory {
+    fn default() -> Self {
+        Memory::empty()
+    }
 }
 
 impl Memory {

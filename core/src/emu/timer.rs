@@ -14,7 +14,8 @@ pub struct Timer {
     overflow_delay: u8,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct TimerState {
     system_counter: u16,
     internal_tma: u8,

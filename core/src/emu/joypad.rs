@@ -7,8 +7,9 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum JoypadButton {
+    #[default]
     Right,
     Left,
     Up,
@@ -19,7 +20,7 @@ pub enum JoypadButton {
     Select,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 struct JoypadEvent {
     button: JoypadButton,
     pressed: bool,
@@ -96,7 +97,8 @@ pub struct Joypad {
     state: JoypadState,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct JoypadSnapshot {
     queue: VecDeque<JoypadEvent>,
     state: JoypadState,

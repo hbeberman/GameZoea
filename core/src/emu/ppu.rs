@@ -15,8 +15,9 @@ pub const WHITE: [u8; 4] = [0x7B, 0x82, 0x10, 0xFF];
 
 const FRAME_BYTES: usize = (SCREEN_WIDTH as usize) * (SCREEN_HEIGHT as usize) * 4;
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Default)]
 enum Mode {
+    #[default]
     M0,
     M1,
     M2,
@@ -34,8 +35,9 @@ impl Mode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 enum Fetch {
+    #[default]
     Tile_,
     Tile,
     DataLo_,
@@ -63,7 +65,7 @@ impl Fetch {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[allow(dead_code)]
 pub struct Oa {
     pri: u8,
@@ -131,7 +133,7 @@ pub struct Ppu {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct Pixel {
     color: u8, // 0..=3
     palette: u8,
@@ -178,7 +180,8 @@ impl Ppu {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct PpuState {
     objects: Vec<Oa>,
     bg_fifo: Vec<Pixel>,

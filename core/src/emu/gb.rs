@@ -31,8 +31,9 @@ const L_TIMER: u8 = 1 << 2;
 const L_R: u8 = 1 << 3;
 const L_MEM: u8 = 1 << 4;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub enum Comp {
+    #[default]
     None,
     Cpu,
     Ppu,
@@ -411,8 +412,8 @@ impl Gameboy {
 
     pub fn dump_to_file(&mut self) -> io::Result<PathBuf> {
         let state = self.save_state();
-        let data =
-            bincode::serialize(&state).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let data = serde_json::to_vec(&state)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let guid = Uuid::new_v4();
         let filename = format!("{guid}.core");
         let path = env::current_dir()?.join(filename);
@@ -421,7 +422,8 @@ impl Gameboy {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct GameboyState {
     t: u64,
     memory: Memory,
@@ -435,7 +437,10 @@ pub struct GameboyState {
 impl GameboyState {
     pub fn from_path(path: &Path) -> io::Result<Self> {
         let data = fs::read(path)?;
-        bincode::deserialize(&data).map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        // Try JSON first (new format), fall back to bincode (old format)
+        serde_json::from_slice(&data)
+            .or_else(|_| bincode::deserialize(&data))
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
     }
 
     pub fn cartridge_bytes(&self) -> &[u8] {
