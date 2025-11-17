@@ -255,6 +255,13 @@ impl Memory {
             self.data = 0xFF;
             return;
         }
+        if (0x7F80..0x8000).contains(&self.addr) {
+            self.data = self.read_mapped(addr);
+            eprintln!(
+                "mbcrombank {:02X} {:04X}:{:02X}",
+                self.mbc1rombank, self.addr, self.data
+            );
+        }
         self.data = self.read_mapped(addr);
     }
 
@@ -349,11 +356,7 @@ impl Memory {
                 self.write_div = true;
             }
             STAT => {
-                eprintln!("!!!!!!!!! STAT WRITE {:02x}", data);
-                if data != 0x44 {
-                    panic!();
-                }
-                self.mem[addr as usize] = data & 0xF8;
+                self.mem[addr as usize] = data & 0x78;
             }
             LYC => {
                 eprintln!("!!!!!!!!! LYC WRITE {:02x}", data);
@@ -554,7 +557,14 @@ impl Memory {
     pub fn mbc1_register_write(&mut self) {
         match self.addr {
             0x0000..=0x1FFF => self.ram_enable = self.data & 0x0A == 0x0A,
-            0x2000..=0x3FFF => self.mbc1rombank = self.data & 0x1F,
+            0x2000..=0x3FFF => {
+                self.mbc1rombank = self.data & 0x1F;
+                match self.data {
+                    0x1 | 0xC | 0x1F | 0x1B => (),
+                    _ => (), //panic!("MBC BANK {:02X}", self.data & 0x1F),
+                }
+                eprintln!("mbcrombank {:02X}", self.mbc1rombank);
+            }
             0x4000..=0x5FFF => self.mbc1rambank = self.data & 0x3,
             0x6000..=0x7FFF => self.mbc1bankmode = self.data & 0x1,
             _ => unreachable!("Invalid addr:{:04X} for MBC1 write", self.addr),

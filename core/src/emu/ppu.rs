@@ -251,6 +251,8 @@ impl Ppu {
         if !self.lcd_was_enabled {
             self.lcd_was_enabled = true;
             self.x = 0;
+            // Save old comparison bit state before changing LY
+            let old_lyc_match = (self.mem_read(STAT) & 0x04) != 0;
             self.set_ly(0);
             self.reset_fetch_pipeline();
             self.mode = Mode::M2;
@@ -259,6 +261,21 @@ impl Ppu {
             for chunk in self.back_buffer.chunks_exact_mut(4) {
                 chunk.copy_from_slice(&WHITE);
             }
+            // Update STAT comparison bit for new LY value
+            self.update_stat();
+            self.set_mode(self.mode.bits());
+            // Check if comparison bit changed from false to true
+            let new_lyc_match = self.ly() == self.lyc();
+            if old_lyc_match && new_lyc_match {
+                // Comparison was true before LCD off and still true after LCD on
+                // Interrupt line was already high, so set flag to block re-firing
+                self.already_interrupted = true;
+            } else {
+                self.already_interrupted = false;
+            }
+            // Check for interrupt on LCD enable (LYC only, no mode interrupt yet)
+            self.check_mode_interrupt(true);
+            return;
         }
 
         let mode = self.mode;
@@ -270,8 +287,10 @@ impl Ppu {
         }
         if mode != self.mode {
             self.set_mode(self.mode.bits());
-            self.check_interrupt();
         }
+        // LYC interrupt is checked one cycle into M2, not at the start
+        let lyc_enabled = !(self.mode == Mode::M2 && self.dot == 80);
+        self.check_mode_interrupt(lyc_enabled);
         self.update_stat();
     }
 
@@ -332,6 +351,7 @@ impl Ppu {
         if self.dot == 0 {
             self.x = 0;
             let ly = self.ly() + 1;
+            /*
             eprintln!(
                 "Setting LY to #{}, LYC is #{} IF{:02X} IE{:02X} STAT{:02X}",
                 ly,
@@ -340,6 +360,7 @@ impl Ppu {
                 self.mem_read(IE),
                 self.mem_read(STAT),
             );
+            */
             self.set_ly(ly);
             self.dot = if ly == 144 {
                 // Next mode is VBLANK
@@ -630,7 +651,7 @@ impl Ppu {
     }
 
     pub fn set_ly(&mut self, ly: u8) {
-        self.mem_write(0xFF44, ly)
+        self.mem_write(0xFF44, ly);
     }
 
     pub fn lyc(&self) -> u8 {
@@ -655,18 +676,37 @@ impl Ppu {
         self.mem_write(STAT, stat);
     }
 
-    pub fn check_interrupt(&mut self) {
+    pub fn check_mode_interrupt(&mut self, lyc_enabled: bool) {
         let stat = self.mem_read(STAT);
-        let mode = match self.mode {
+        let mode_cond = match self.mode {
             Mode::M0 => isbitset!(stat, 3),
             Mode::M1 => isbitset!(stat, 4),
             Mode::M2 => isbitset!(stat, 5),
             Mode::M3 => false,
         };
-        let lyc = (self.ly() == self.lyc()) && isbitset!(stat, 6);
+        let lyc_cond = if lyc_enabled {
+            (self.ly() == self.lyc()) && isbitset!(stat, 6)
+        } else {
+            false
+        };
 
-        if mode || lyc {
-            eprintln!("Generating STAT Interrupt:");
+        let line_high = mode_cond || lyc_cond;
+
+        if line_high {
+            if mode_cond {
+                eprintln!(
+                    "Generating Mode STAT Interrupt:ly#{} mode:{:?}",
+                    self.ly(),
+                    self.mode,
+                );
+            }
+            if lyc_cond {
+                eprintln!(
+                    "Generating LYC STAT Interrupt:ly#{} lyc#{}",
+                    self.ly(),
+                    self.lyc(),
+                );
+            }
             if !self.already_interrupted {
                 self.already_interrupted = true;
                 let mut reg_if = self.mem_read(IF);

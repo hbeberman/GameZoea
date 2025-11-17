@@ -114,7 +114,7 @@ impl Gameboy {
             if cur != self.cpu.retired() || (self.cpu.halted()) {
                 //self.log_status(L_CPU + L_ADJ + L_R + L_TIMER);
                 //                self.log_status(L_CPU);
-                self.log_status(L_CPU + L_TIMER + L_MEM);
+                //self.log_status(L_CPU + L_TIMER + L_MEM);
             }
         }
     }
@@ -311,10 +311,6 @@ impl Gameboy {
         // Dont print while halted
         if self.mem_dbg_read(pc) == 0x76 {
             return;
-        }
-
-        if pc == 0x711a {
-            dump!();
         }
 
         let regs_view = self.cpu.log_view(adj);
